@@ -48,6 +48,16 @@ docker compose -f deploy/docker-compose.yml up --build
 | postgres / redis | 否（`expose`） | 仅容器网络内可达 |
 | sentiment-monitor | 否（`expose`） | 不直接对公网暴露，为 Phase 3 的 P0-1 铺路 |
 
+### 关于 `deploy/Dockerfile.sentiment-monitor`
+
+Phase 0 不改动 `sentiment-monitor/` 源码，但该组件自带的 Dockerfile 有两处会让
+`compose up --build` 起不来：基础镜像 `node:18` 低于依赖 `better-sqlite3@13`
+要求的 `node >= 22`（低版本编译出的原生模块运行期直接 segfault），且镜像内缺少
+`python3/make/g++` 导致 node-gyp 无法编译。因此编排层在 `deploy/` 下提供了一份
+补上 Node 版本与工具链的 Dockerfile，build context 仍是组件源码目录。
+
+建议由组件 owner 把这两点并入其自身 Dockerfile，届时该文件即可删除。
+
 ## 本地开发
 
 ### 前端
@@ -118,6 +128,10 @@ nginx（`deploy/nginx.conf`）做统一入口：
 - `/rest/v1/` → api，去掉前缀后转发给 FastAPI
 - `/healthz` → api，直通，便于探针使用
 - 舆情走独立 server 块（端口 8081），SSE 相关 `proxy_buffering off`
+
+后端地址通过变量 + Docker 内嵌 DNS 延迟解析。若改用 `upstream` 块写死服务名，
+nginx 启动时会解析一次，任一后端容器尚在重启就会以 `host not found` 退出并反复重试，
+反而把启动顺序问题放大成启动死锁。
 
 ## CI
 

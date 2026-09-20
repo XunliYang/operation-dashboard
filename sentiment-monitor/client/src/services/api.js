@@ -29,6 +29,12 @@ export const historyApi = {
   export: (projectId, data) => api.post(`/projects/${projectId}/items/export`, data),
 };
 
+// 今日热点
+export const hotspotsApi = {
+  list: (projectId, params) => api.get(`/projects/${projectId}/hotspots`, { params }),
+  summary: (projectId) => api.get(`/projects/${projectId}/hotspots/summary`),
+};
+
 // 决策记录
 export const decisionsApi = {
   list: (params) => api.get('/decisions', { params }),

@@ -1,0 +1,19 @@
+# 组织 / 团队映射
+#
+# 字段说明：
+#   key         — 组织唯一键，`tracked_repos.yaml` 的 org 字段引用它
+#   display     — 展示名
+#   members     — 成员 GitHub login 列表，用于成员维度聚合
+#   repos       — 该组织下的仓库全名（可选，便于校验）
+
+orgs:
+  platform:
+    display: 平台组
+    members:
+      - XunliYang
+    repos:
+      - XunliYang/operation-dashboard
+      - XunliYang/sentiment-monitor
+
+# 未匹配到任何组织的仓库归入此组织
+default_org: platform

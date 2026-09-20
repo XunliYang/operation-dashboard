@@ -1,0 +1,38 @@
+# 舆情组件的编排层 Dockerfile（Phase 0）
+#
+# 为什么存在这个文件：
+#   `sentiment-monitor/Dockerfile` 基于 node:18-alpine，直接 `npm install --production`。
+#   其依赖 `better-sqlite3` 是原生插件，该镜像没有 python3 / make / g++，
+#   node-gyp 会以 "Could not find any Python installation to use" 失败，
+#   导致整个 `docker compose up --build` 中止。
+#
+#   Phase 0 的约束是不改动 `sentiment-monitor/` 源码，因此把「补装构建工具链」
+#   这一编排关注点放在 deploy/ 下，build context 仍是该组件源码目录。
+#
+# 后续建议（见 PR 风险点）：由组件 owner 把构建工具链并入其自身 Dockerfile，
+#   或改用多阶段构建 + `npm ci --omit=dev`，届时本文件即可删除。
+
+FROM node:18-alpine
+
+# better-sqlite3 原生编译所需的工具链
+RUN apk add --no-cache python3 make g++ sqlite-dev
+
+WORKDIR /app
+
+# Install dependencies
+COPY package*.json ./
+COPY client/package*.json ./client/
+RUN npm install --production
+RUN cd client && npm install
+
+# Copy source code
+COPY . .
+
+# Build frontend
+RUN cd client && npm run build
+
+# Expose port（实际对外暴露由 nginx 提供，这里只声明容器内端口）
+EXPOSE 3000
+
+# Start server
+CMD ["node", "server/index.js"]

@@ -1,0 +1,36 @@
+[project]
+name = "operation-dashboard-collector"
+version = "0.1.0"
+description = "运营看板采集调度空壳（Phase 0，不接 GitHub API）"
+requires-python = ">=3.12"
+dependencies = [
+    "APScheduler>=3.10,<4.0",
+    "redis>=5.2,<6.0",
+    "PyYAML>=6.0,<7.0",
+    "loguru>=0.7,<1.0",
+    "pydantic-settings>=2.6,<3.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3,<9.0",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["collector*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E501"]

@@ -1,0 +1,51 @@
+# 仓库健康分各维度权重（加权和，建议合计为 1.0）
+#
+# 字段说明：
+#   dimension   — 维度键，对应计算模块的指标名
+#   weight      — 权重，0–1
+#   direction   — higher_better / lower_better
+#   thresholds  — 归一化分档，用于把原始值映射到 0–100
+
+weights:
+  commit_frequency:
+    weight: 0.25
+    direction: higher_better
+    thresholds:
+      excellent: 20   # 近 30 天提交数
+      good: 8
+      poor: 2
+  issue_closure_rate:
+    weight: 0.20
+    direction: higher_better
+    thresholds:
+      excellent: 0.8
+      good: 0.5
+      poor: 0.2
+  pr_review_latency_hours:
+    weight: 0.20
+    direction: lower_better
+    thresholds:
+      excellent: 4
+      good: 24
+      poor: 72
+  stale_issue_ratio:
+    weight: 0.15
+    direction: lower_better
+    thresholds:
+      excellent: 0.05
+      good: 0.2
+      poor: 0.5
+  sentiment_score:
+    weight: 0.20
+    direction: higher_better
+    thresholds:
+      excellent: 0.5
+      good: 0.1
+      poor: -0.3
+
+# 分档对应的 0–100 分值
+score_bands:
+  excellent: 100
+  good: 75
+  poor: 40
+  critical: 10

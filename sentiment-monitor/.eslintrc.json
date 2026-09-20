@@ -1,0 +1,34 @@
+{
+  "env": {
+    "node": true,
+    "es2021": true
+  },
+  "parserOptions": {
+    "ecmaVersion": 2021
+  },
+  "rules": {
+    "semi": ["error", "always"],
+    "comma-dangle": ["error", "always-multiline"],
+    "curly": ["error", "all"],
+    "no-console": "off",
+    "prefer-template": "error",
+    "prefer-destructuring": ["error", {
+      "array": true,
+      "object": false
+    }],
+    "no-param-reassign": "error",
+    "dot-notation": "error",
+    "object-shorthand": "error",
+    "camelcase": ["error", { "properties": "never" }],
+    "no-nested-ternary": "error",
+    "max-depth": ["error", 4],
+    "complexity": ["error", 20],
+    "max-lines-per-function": ["warn", { "max": 100, "skipBlankLines": true, "skipComments": true }],
+    "operator-linebreak": ["error", "after"],
+    "newline-per-chained-call": "off",
+    "padded-blocks": "off",
+    "space-before-blocks": "error",
+    "keyword-spacing": "error",
+    "no-else-return": "off"
+  }
+}

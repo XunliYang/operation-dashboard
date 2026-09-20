@@ -1,0 +1,6 @@
+node_modules/
+monitor-output.log
+.env
+data/
+pdf/
+reports/

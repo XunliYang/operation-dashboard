@@ -1,0 +1,92 @@
+{
+  "project": {
+    "name": "openan-monitor",
+    "displayName": "OpenAN",
+    "description": "OpenAN 舆情监控系统 - 每日检索并分析相关内容",
+    "userAgent": "OpenAN-Monitor/1.0",
+    "timezone": "Asia/Shanghai",
+    "defaultKeywords": ["OpenAN", "A2A-T"],
+    "emailFrom": "OpenAN Monitor <m18801339653@163.com>",
+    "emailSubject": "OpenAN 舆情日报 — {date}",
+    "reportTitle": "📋 OpenAN 舆情监控日报",
+    "pdfFilename": "{name}-report-{date}.pdf"
+  },
+  "keywords": [
+    "OpenAN",
+    "A2A-T"
+  ],
+  "keywordConfig": {
+    "daysBack": 3,
+    "todayOnly": false
+  },
+  "searchVariants": [
+    "{keyword}",
+    "\"{keyword}\"",
+    "{keyword} AI",
+    "\"{keyword}\" platform",
+    "{keyword} technology"
+  ],
+  "rssSources": [
+    "https://news.google.com/rss?q=%22{keyword}%22&hl=en-US&gl=US&ceid=US:en",
+    "https://www.bing.com/news/search?q=%22{keyword}%22&format=rss",
+    "https://news.google.com/rss?q=site%3Ahuawei.com+{keyword}&hl=en-US&gl=US&ceid=US:en",
+    "https://news.google.com/rss?q=site%3Ahuawei.com+{keyword}&hl=zh-CN&gl=CN&ceid=CN:zh-Hans",
+    "https://www.bing.com/news/search?q=site%3Ahuawei.com+{keyword}&format=rss",
+    "https://www.fierce-network.com/rss/xml",
+    "https://lfnetworking.org/feed/",
+    "https://events.linuxfoundation.org/feed/",
+    "https://developingtelecoms.com/index.php?format=feed&type=rss",
+    "https://sspai.com/feed",
+    "https://36kr.com/feed",
+    "https://www.ithome.com/rss/",
+    "https://www.freebuf.com/feed",
+    "https://www.jiqizhixin.com/rss",
+    "https://hnrss.org/newest?q={keyword}",
+    "https://hnrss.org/newest?q=Open+AN+AI",
+    "https://www.telecomreviewasia.com/feed/",
+    "https://news.google.com/rss?q=site%3Ac114.com.cn+{keyword}&hl=zh-CN&gl=CN&ceid=CN:zh-Hans"
+  ],
+  "sites": [
+    { "platform": "csdn", "query": "site:csdn.net" },
+    { "platform": "baidu", "query": "site:tieba.baidu.com OR site:zhidao.baidu.com" },
+    { "platform": "zhihu", "query": "site:zhihu.com" },
+    { "platform": "weibo", "query": "site:weibo.com OR site:weibo.cn" },
+    { "platform": "facebook", "query": "site:facebook.com" },
+    { "platform": "bilibili", "query": "site:bilibili.com" },
+    { "platform": "weixin", "query": "site:mp.weixin.qq.com" },
+    { "platform": "juejin", "query": "site:juejin.cn" },
+    { "platform": "toutiao", "query": "site:toutiao.com" },
+    { "platform": "36kr", "query": "site:36kr.com" },
+    { "platform": "sspai", "query": "site:sspai.com" }
+  ],
+  "email": {
+    "enabled": true,
+    "smtp": {
+      "host": "smtp.163.com",
+      "port": 465,
+      "secure": true,
+      "auth": {
+        "user": "${SMTP_USER}",
+        "pass": "${SMTP_PASS}"
+      }
+    },
+    "to": [
+      "yangxunli1@huawei.com"
+    ],
+    "productionTo": [
+      "yangxunli1@huawei.com",
+      "chenchuanyu@huawei.com",
+      "dingtingyu1@huawei.com",
+      "huangjunjie72@huawei.com",
+      "zuozongyuan@huawei.com",
+      "zhangfan345@huawei.com",
+      "shizilong1@h-partners.com"
+    ],
+    "productionCc": [
+      "yuyijun@huawei.com",
+      "jinweiwei@huawei.com",
+      "shichenguang@huawei.com",
+      "xusuqin@huawei.com"
+    ]
+  }
+}

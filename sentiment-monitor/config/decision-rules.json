@@ -1,0 +1,12 @@
+{
+  "sourceHealth": {
+    "disableAfterDays": 3,
+    "threshold": 0.5,
+    "notifyOnDisable": true
+  },
+  "contentQuality": {
+    "zeroDataAction": "checkConfig",
+    "highVolumeThreshold": 200,
+    "highVolumeAction": "strictFilter"
+  }
+}

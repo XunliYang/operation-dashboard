@@ -1,0 +1,72 @@
+{
+  "project": {
+    "name": "sentiment-monitor",
+    "displayName": "舆情监控",
+    "description": "每日检索并分析相关舆情内容",
+    "userAgent": "SentimentMonitor/1.0",
+    "timezone": "Asia/Shanghai",
+    "defaultKeywords": ["YourKeyword"],
+    "emailFrom": "Monitor <noreply@example.com>",
+    "emailSubject": "{displayName} 舆情日报 — {date}",
+    "reportTitle": "📋 {displayName} 舆情监控日报",
+    "pdfFilename": "{name}-report-{date}.pdf"
+  },
+  "keywords": ["${KEYWORDS}"],
+  "keywordConfig": {
+    "daysBack": 3,
+    "todayOnly": false
+  },
+  "searchVariants": [
+    "{keyword}",
+    "\"{keyword}\"",
+    "{keyword} AI"
+  ],
+  "rssSources": [
+    "https://news.google.com/rss?q=%22{keyword}%22&hl=en-US&gl=US&ceid=US:en",
+    "https://www.bing.com/news/search?q=%22{keyword}%22&format=rss",
+    "https://news.google.com/rss?q=site%3Ahuawei.com+{keyword}&hl=en-US&gl=US&ceid=US:en",
+    "https://news.google.com/rss?q=site%3Ahuawei.com+{keyword}&hl=zh-CN&gl=CN&ceid=CN:zh-Hans",
+    "https://www.bing.com/news/search?q=site%3Ahuawei.com+{keyword}&format=rss",
+    "https://www.fierce-network.com/rss/xml",
+    "https://lfnetworking.org/feed/",
+    "https://events.linuxfoundation.org/feed/",
+    "https://developingtelecoms.com/index.php?format=feed&type=rss",
+    "https://sspai.com/feed",
+    "https://36kr.com/feed",
+    "https://www.ithome.com/rss/",
+    "https://www.freebuf.com/feed",
+    "https://www.jiqizhixin.com/rss",
+    "https://hnrss.org/newest?q={keyword}",
+    "https://hnrss.org/newest?q=Open+AN+AI",
+    "https://www.telecomreviewasia.com/feed/",
+    "https://news.google.com/rss?q=site%3Ac114.com.cn+{keyword}&hl=zh-CN&gl=CN&ceid=CN:zh-Hans"
+  ],
+  "sites": [
+    { "platform": "csdn", "query": "site:csdn.net" },
+    { "platform": "baidu", "query": "site:tieba.baidu.com OR site:zhidao.baidu.com" },
+    { "platform": "zhihu", "query": "site:zhihu.com" },
+    { "platform": "weibo", "query": "site:weibo.com OR site:weibo.cn" },
+    { "platform": "facebook", "query": "site:facebook.com" },
+    { "platform": "bilibili", "query": "site:bilibili.com" },
+    { "platform": "weixin", "query": "site:mp.weixin.qq.com" },
+    { "platform": "juejin", "query": "site:juejin.cn" },
+    { "platform": "toutiao", "query": "site:toutiao.com" },
+    { "platform": "36kr", "query": "site:36kr.com" },
+    { "platform": "sspai", "query": "site:sspai.com" }
+  ],
+  "email": {
+    "enabled": true,
+    "smtp": {
+      "host": "smtp.example.com",
+      "port": 465,
+      "secure": true,
+      "auth": {
+        "user": "${SMTP_USER}",
+        "pass": "${SMTP_PASS}"
+      }
+    },
+    "to": ["recipient@example.com"],
+    "productionTo": ["recipient@example.com"],
+    "productionCc": []
+  }
+}

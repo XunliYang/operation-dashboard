@@ -50,7 +50,8 @@ describe('router', () => {
     renderAt('/overview');
     const nav = screen.getByRole('navigation', { name: 'main' });
     for (const label of ['总览', '仓库', '成员', '舆情', '设置']) {
-      expect(within(nav).getByText(label)).toBeInTheDocument();
+      // 同一标签在 `md:hidden` / `hidden md:inline` 两套响应式变体中各渲染一次
+      expect(within(nav).getAllByText(label).length).toBeGreaterThan(0);
     }
   });
 });

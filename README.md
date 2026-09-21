@@ -2,7 +2,9 @@
 
 面向研发运营的多仓库数据看板：聚合仓库活跃度、成员贡献与舆情信号，输出可解释的健康分与趋势视图。
 
-本仓库是 monorepo，当前处于**架构设计 v2 · Phase 0（工程骨架）**：所有组件可运行、可验证，业务数据接入在 Phase 1–3。
+本仓库是 monorepo，当前处于**架构设计 v2 · Phase 1（GitHub 健康度 MVP）**：
+采集 → 存储 → 指标 → API → 页面的全链路已打通（Webhook 优先 + 定时增量兜底、
+五维度健康评分、看板 A 页面）。
 
 ## 目录结构
 
@@ -103,10 +105,21 @@ pytest tests -v
 cd collector
 python -m venv .venv && source .venv/bin/activate
 pip install -e '.[dev]'
-python -m collector.main   # Phase 0 只注册调度，不接 GitHub API
+python -m collector.main                 # 常驻：APScheduler 定时增量兜底
+python -m collector.main --run-once      # 单次：立即对 tracked_repos 跑一轮增量采集
 pytest tests -v
 ```
 
+采集器把 GitHub 事件流写入 PostgreSQL 事实表（`fact_commit` / `fact_pull_request` /
+`fact_issue` / `fact_review` / `fact_workflow_run` / `fact_repo_metric_daily`），
+并在 `collect_run` 记录每轮状态与 `rate_limit_remaining`。需要先由 API 侧建表：
+
+```bash
+cd api && OD_DATABASE_URL=postgresql://od:od_dev_password@localhost:5432/operation_dashboard \
+  python -m app.db.migrate
+```
+
+采集凭据经 `OD_GITHUB_TOKEN`（单 token）或 `OD_GITHUB_TOKENS`（逗号分隔 token 池）注入。
 未配置 Redis 时锁自动降级为 `NullLock`（单实例语义，跨实例互斥失效），日志会给出 warning。
 
 ## 配置

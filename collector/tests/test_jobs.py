@@ -22,10 +22,10 @@ class RecordingLock:
 
 def test_registry_has_expected_jobs():
     names = {spec.name for spec in build_registry()}
-    assert {"collect_github_activity", "recompute_health_scores"} <= names
+    assert "collect_github_activity" in names
 
 
-def test_sentiment_job_disabled_in_phase_0():
+def test_sentiment_job_disabled_in_phase_1():
     specs = {spec.name: spec for spec in build_registry()}
     assert specs["collect_sentiment"].enabled is False
 

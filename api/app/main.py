@@ -17,6 +17,8 @@ from app.middleware.rate_limit import RateLimitMiddleware
 from app.middleware.request_id import RequestIdMiddleware
 from app.middleware.size_limit import SizeLimitMiddleware
 from app.middleware.timeout import TimeoutMiddleware
+from app.routers.admin import router as admin_router
+from app.routers.repos import router as repos_router
 
 # 不限流的路径
 RATE_LIMIT_EXEMPT = {"/healthz"}
@@ -59,6 +61,8 @@ def create_app() -> FastAPI:
 
     register_exception_handlers(app)
     app.include_router(health_router)
+    app.include_router(repos_router)
+    app.include_router(admin_router)
     return app
 
 

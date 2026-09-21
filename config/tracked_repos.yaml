@@ -13,9 +13,11 @@ repos:
     enabled: true
     weight: 2.0
     labels: []
+  # sentiment-monitor 是本 monorepo 内的子目录，并非独立 GitHub 仓库，
+  # GitHub API 会 404，Phase 1 不采集；等其成为独立仓库后再启用。
   - repo: XunliYang/sentiment-monitor
     org: platform
-    enabled: true
+    enabled: false
     weight: 1.0
     labels: []
 

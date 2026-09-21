@@ -27,6 +27,15 @@ class Settings(BaseSettings):
     # 限流：每 IP 每分钟请求数
     rate_limit_per_minute: int = 300
 
+    # 数据层：PostgreSQL 连接串（psycopg 风格）
+    database_url: str = "postgresql://od:od_dev_password@localhost:5432/operation_dashboard"
+
+    # 配置目录：health_weights.yaml / tracked_repos.yaml 存放处
+    config_dir: str = "config"
+
+    # 健康分窗口（天）：指标按最近 N 天的滚动窗口计算
+    health_window_days: int = 30
+
     @property
     def is_dev(self) -> bool:
         return self.env.lower() in {"dev", "local", "development"}

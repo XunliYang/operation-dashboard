@@ -37,7 +37,17 @@ def build_scheduler(settings: CollectorSettings | None = None) -> BlockingSchedu
 
 
 def main() -> None:
-    logger.info("collector starting (Phase 0 调度空壳)")
+    import sys
+
+    if "--run-once" in sys.argv:
+        logger.info("collector run-once (github_incremental)")
+        from collector.jobs import collect_github_activity
+
+        collect_github_activity()
+        logger.info("collector run-once done")
+        return
+
+    logger.info("collector starting (Webhook 优先 + 定时增量兜底)")
     scheduler = build_scheduler()
     try:
         scheduler.start()

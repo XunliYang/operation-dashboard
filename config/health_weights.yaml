@@ -1,51 +1,115 @@
-# 仓库健康分各维度权重（加权和，建议合计为 1.0）
+# 仓库健康度评分：五维度权重与指标口径（Phase 1）
+#
+# 综合分公式（架构 §6.1）：score = Σ_d w_d · dim_score_d（0–100）
+#   dim_score_d = mean(该维度各指标归一化分)
+#   指标归一化默认「阈值分段线性」（normalize_threshold），给定固定输入可复现；
+#   percentile / zscore 用于跨仓库截面归一化（见 api/app/services/normalize.py）。
 #
 # 字段说明：
-#   dimension   — 维度键，对应计算模块的指标名
-#   weight      — 权重，0–1
-#   direction   — higher_better / lower_better
-#   thresholds  — 归一化分档，用于把原始值映射到 0–100
+#   weights        — 五维度权重（会自动归一化，使合计为 1.0）
+#   dimensions.*   — 每维度下的指标集合
+#   direction      — higher_better / lower_better
+#   thresholds     — excellent / good / poor 三档锚点
+#   score_bands    — 阈值归一化锚点分值（excellent=100, good=75, poor=40, critical=10）
+#   normalization  — 指标归一化方式：threshold（默认）| percentile | zscore
 
 weights:
-  commit_frequency:
-    weight: 0.25
-    direction: higher_better
-    thresholds:
-      excellent: 20   # 近 30 天提交数
-      good: 8
-      poor: 2
-  issue_closure_rate:
-    weight: 0.20
-    direction: higher_better
-    thresholds:
-      excellent: 0.8
-      good: 0.5
-      poor: 0.2
-  pr_review_latency_hours:
-    weight: 0.20
-    direction: lower_better
-    thresholds:
-      excellent: 4
-      good: 24
-      poor: 72
-  stale_issue_ratio:
-    weight: 0.15
-    direction: lower_better
-    thresholds:
-      excellent: 0.05
-      good: 0.2
-      poor: 0.5
-  sentiment_score:
-    weight: 0.20
-    direction: higher_better
-    thresholds:
-      excellent: 0.5
-      good: 0.1
-      poor: -0.3
+  activity: 0.25
+  collaboration: 0.25
+  quality: 0.20
+  community: 0.15
+  sustainability: 0.15
 
-# 分档对应的 0–100 分值
+dimensions:
+  activity:
+    label: 活跃度
+    indicators:
+      commits:
+        label: 提交数
+        direction: higher_better
+        thresholds: { excellent: 20, good: 8, poor: 2 }
+      active_contributors:
+        label: 活跃贡献者
+        direction: higher_better
+        thresholds: { excellent: 5, good: 2, poor: 1 }
+      prs_merged:
+        label: 合并 PR 数
+        direction: higher_better
+        thresholds: { excellent: 6, good: 3, poor: 1 }
+      issues_closed:
+        label: 关闭 Issue 数
+        direction: higher_better
+        thresholds: { excellent: 6, good: 2, poor: 1 }
+
+  collaboration:
+    label: 协作效率
+    indicators:
+      pr_first_review_median_hours:
+        label: PR 首评耗时中位数（小时）
+        direction: lower_better
+        thresholds: { excellent: 4, good: 24, poor: 72 }
+      pr_merge_median_hours:
+        label: PR 合并耗时中位数（小时）
+        direction: lower_better
+        thresholds: { excellent: 24, good: 72, poor: 168 }
+      review_coverage:
+        label: Review 覆盖率
+        direction: higher_better
+        thresholds: { excellent: 0.8, good: 0.5, poor: 0.2 }
+      stale_open_ratio:
+        label: 陈旧未处理占比
+        direction: lower_better
+        thresholds: { excellent: 0.05, good: 0.2, poor: 0.5 }
+
+  quality:
+    label: 质量稳定
+    indicators:
+      ci_success_rate:
+        label: CI 成功率
+        direction: higher_better
+        thresholds: { excellent: 0.95, good: 0.8, poor: 0.5 }
+      bug_issue_ratio:
+        label: bug 类 Issue 占比
+        direction: lower_better
+        thresholds: { excellent: 0.1, good: 0.3, poor: 0.6 }
+
+  community:
+    label: 社区影响
+    indicators:
+      star_growth:
+        label: Star 增长
+        direction: higher_better
+        thresholds: { excellent: 10, good: 2, poor: 0 }
+      fork_growth:
+        label: Fork 增长
+        direction: higher_better
+        thresholds: { excellent: 5, good: 1, poor: 0 }
+      new_contributors:
+        label: 新增贡献者
+        direction: higher_better
+        thresholds: { excellent: 3, good: 1, poor: 0 }
+
+  sustainability:
+    label: 可持续性
+    indicators:
+      bus_factor_top1:
+        label: Top1 贡献占比（Bus Factor）
+        direction: lower_better
+        thresholds: { excellent: 0.4, good: 0.6, poor: 0.9 }
+      bus_factor_top3:
+        label: Top3 贡献占比
+        direction: lower_better
+        thresholds: { excellent: 0.7, good: 0.85, poor: 1.0 }
+      contributor_retention:
+        label: 贡献者留存率
+        direction: higher_better
+        thresholds: { excellent: 0.6, good: 0.3, poor: 0.1 }
+
 score_bands:
   excellent: 100
   good: 75
   poor: 40
   critical: 10
+
+normalization:
+  method: threshold

@@ -1,0 +1,41 @@
+# 舆情情感映射
+#
+# 字段说明：
+#   polarity         — 情感极性标签 → 归一化分值区间（-1 负面 ~ 1 正面）
+#   severity         — 严重度 → 权重，用于加权聚合总情感分
+#   keyword_rules    — 关键词 → 极性，作为模型输出之外的兜底规则
+#   escalate         — 触发人工关注的阈值
+
+polarity:
+  positive:
+    min: 0.3
+    max: 1.0
+  neutral:
+    min: -0.3
+    max: 0.3
+  negative:
+    min: -1.0
+    max: -0.3
+
+severity:
+  critical: 1.0
+  high: 0.75
+  medium: 0.5
+  low: 0.25
+
+keyword_rules:
+  - pattern: "数据丢失"
+    polarity: negative
+    severity: critical
+  - pattern: "严重故障"
+    polarity: negative
+    severity: high
+  - pattern: "好评"
+    polarity: positive
+    severity: low
+
+escalate:
+  # 单条舆情低于此分即告警
+  single_score_below: -0.6
+  # 24h 加权均分低于此分即告警
+  daily_avg_below: -0.3

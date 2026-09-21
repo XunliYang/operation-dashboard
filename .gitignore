@@ -1,0 +1,27 @@
+# 依赖与构建产物
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# 环境与凭据
+.env
+.env.local
+*.pem
+*.key
+
+# 编辑器 / 系统
+.DS_Store
+.idea/
+.vscode/
+*.log

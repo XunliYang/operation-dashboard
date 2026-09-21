@@ -1,0 +1,26 @@
+# 追踪仓库清单
+#
+# 字段说明：
+#   repo        — GitHub 仓库全名（owner/name）
+#   org         — 归属组织键，需存在于 org_mapping.yaml
+#   enabled     — 是否纳入采集
+#   weight      — 在组织/整体健康分中的权重（相对值，越大越重要）
+#   labels      — 仅采集这些标签的 issue/PR；留空表示不限
+
+repos:
+  - repo: XunliYang/operation-dashboard
+    org: platform
+    enabled: true
+    weight: 2.0
+    labels: []
+  - repo: XunliYang/sentiment-monitor
+    org: platform
+    enabled: true
+    weight: 1.0
+    labels: []
+
+# 采集节流（秒）：同一仓库两次采集的最小间隔
+fetch_interval_seconds: 600
+
+# 单次采集最多拉取的天数（首次回填用）
+backfill_days: 90

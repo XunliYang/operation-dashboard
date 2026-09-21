@@ -15,8 +15,8 @@ from loguru import logger
 import collector.db as db
 from collector.collector import GitHubCollector
 from collector.config import get_settings
-from collector.github.client import GitHubClient
-from collector.github.ratelimit import TokenPool
+from collector.github.client import GitHubClient, RateLimitExceeded
+from collector.github.ratelimit import TokenPool, seconds_until_reset
 from collector.lock import Lock
 from collector.tracked import load_tracked_repos
 
@@ -29,6 +29,89 @@ class JobSpec:
     description: str = ""
     enabled: bool = True
     tags: list[str] = field(default_factory=list)
+
+
+def _finish_failed(conn, run_id: int, client: GitHubClient, error: str) -> None:
+    """记录一次失败采集；附带客户端最近一次响应的配额余量（可能为 0）。"""
+    remaining = client.rate_limit.remaining if client.rate_limit else None
+    db.finish_collect_run(
+        conn,
+        run_id=run_id,
+        status="failed",
+        rate_limit_remaining=remaining,
+        error=error,
+    )
+    conn.commit()
+
+
+def _reset_eta(client: GitHubClient) -> str | None:
+    """配额重置还需等待的秒数（无 reset 头时返回 None）。"""
+    state = client.rate_limit
+    if state is None or state.reset_epoch is None:
+        return None
+    wait = seconds_until_reset(state.reset_epoch)
+    return None if wait is None else f"{wait:.0f}s"
+
+
+def collect_repos(
+    repos: list[dict],
+    client: GitHubClient,
+    conn,
+    *,
+    backfill_days: int,
+    job: str = "github_incremental",
+) -> dict[str, int]:
+    """逐仓库跑一轮增量采集，逐仓库记一条 collect_run。
+
+    配额耗尽（`RateLimitExceeded`）时中断本轮：之后每个仓库的请求注定 403，
+    记录余量与 reset 时间后停下，避免在配额窗口内刷屏失败记录。返回
+    `{collected, failed, skipped}` 统计。
+    """
+    collector = GitHubCollector(client, conn, backfill_days=backfill_days)
+    total = len(repos)
+    collected = 0
+    failed = 0
+
+    for idx, repo in enumerate(repos):
+        full_name = repo["repo"]
+        owner, name = full_name.split("/", 1)
+        run_id = db.start_collect_run(conn, job=job, repo_id=None)
+        conn.commit()  # 'running' 行先落库，采集与收尾各自独立事务
+        try:
+            result = collector.collect_repo(owner, name)
+            db.finish_collect_run(
+                conn,
+                run_id=run_id,
+                status="success",
+                rate_limit_remaining=result.get("rate_limit_remaining"),
+            )
+            if result.get("repo_id"):
+                conn.execute(
+                    "UPDATE collect_run SET repo_id=%s WHERE run_id=%s",
+                    (result["repo_id"], run_id),
+                )
+            conn.commit()
+            collected += 1
+            logger.info("collected {}: {}", full_name, result)
+        except RateLimitExceeded:
+            conn.rollback()
+            _finish_failed(conn, run_id, client, "GitHub 配额耗尽（X-RateLimit-Remaining=0）")
+            failed += 1
+            skipped = total - idx - 1
+            eta = _reset_eta(client)
+            logger.warning(
+                "GitHub 配额耗尽，中断本轮：剩余 {} 个仓库跳过{}",
+                skipped,
+                f"（配额约 {eta} 后重置）" if eta else "",
+            )
+            break
+        except Exception as exc:  # noqa: BLE001 — 单仓库失败不影响其余仓库
+            conn.rollback()
+            _finish_failed(conn, run_id, client, str(exc)[:1000])
+            failed += 1
+            logger.exception("collection failed for {}: {}", full_name, exc)
+
+    return {"collected": collected, "failed": failed, "skipped": total - collected - failed}
 
 
 def collect_github_activity() -> None:
@@ -52,36 +135,9 @@ def collect_github_activity() -> None:
         return
 
     with db.connect_db(settings.database_url) as conn:
-        collector = GitHubCollector(client, conn, backfill_days=settings.backfill_days)
-        for repo in repos:
-            full_name = repo["repo"]
-            owner, name = full_name.split("/", 1)
-            try:
-                run_id = db.start_collect_run(conn, job="github_incremental", repo_id=None)
-                result = collector.collect_repo(owner, name)
-                db.finish_collect_run(
-                    conn,
-                    run_id=run_id,
-                    status="success",
-                    rate_limit_remaining=result.get("rate_limit_remaining"),
-                )
-                if result.get("repo_id"):
-                    conn.execute(
-                        "UPDATE collect_run SET repo_id=%s WHERE run_id=%s",
-                        (result["repo_id"], run_id),
-                    )
-                conn.commit()
-                logger.info("collected {}: {}", full_name, result)
-            except Exception as exc:  # noqa: BLE001 — 单仓库失败不影响其余仓库
-                conn.rollback()
-                try:
-                    run_id = db.start_collect_run(conn, job="github_incremental", repo_id=None)
-                    db.finish_collect_run(conn, run_id=run_id, status="failed", error=str(exc)[:1000])
-                    conn.commit()
-                except Exception:  # noqa: BLE001
-                    conn.rollback()
-                    logger.exception("记录 collect_run 失败也异常，忽略")
-                logger.exception("collection failed for {}: {}", full_name, exc)
+        stats = collect_repos(repos, client, conn, backfill_days=settings.backfill_days)
+        if stats["skipped"]:
+            logger.warning("本轮因配额耗尽跳过 {} 个仓库", stats["skipped"])
 
 
 def collect_sentiment() -> None:

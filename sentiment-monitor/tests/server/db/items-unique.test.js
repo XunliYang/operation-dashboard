@@ -25,7 +25,7 @@ function createItemsTable(db) {
 
 describe('items 表 (project_id, url) 唯一约束（LEOY-32）', () => {
   describe('migrateItemsUniqueIndex 迁移', () => {
-    it('清理已有重复 URL 条目并成功建立唯一索引', () => {
+    it('清理已有重复 URL 条目并成功建立部分唯一索引', () => {
       const mem = new Database(':memory:');
       createItemsTable(mem);
 
@@ -47,7 +47,7 @@ describe('items 表 (project_id, url) 唯一约束（LEOY-32）', () => {
 
       const idx = mem
         .prepare(
-          "SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_items_project_url'"
+          "SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'uniq_items_project_url'"
         )
         .all();
       expect(idx).toHaveLength(1);
@@ -59,6 +59,34 @@ describe('items 表 (project_id, url) 唯一约束（LEOY-32）', () => {
         )
         .run(1, 'rss', 'https://a.example.com/1');
       expect(mem.prepare('SELECT COUNT(*) c FROM items').get().c).toBe(3);
+    });
+
+    it('空 URL 行不参与去重，显式保留', () => {
+      const mem = new Database(':memory:');
+      createItemsTable(mem);
+
+      const insert = mem.prepare(
+        'INSERT INTO items (project_id, source, url) VALUES (?, ?, ?)'
+      );
+      insert.run(1, 'rss', '');
+      insert.run(1, 'rss', '');
+      insert.run(1, 'rss', 'https://real.example.com/1');
+      insert.run(1, 'rss', 'https://real.example.com/1');
+
+      migrateItemsUniqueIndex(mem);
+
+      // 空 URL 两条都保留，真实 URL 去重成一条
+      expect(
+        mem.prepare('SELECT COUNT(*) c FROM items WHERE project_id = 1').get().c
+      ).toBe(3);
+      expect(
+        mem.prepare("SELECT COUNT(*) c FROM items WHERE project_id = 1 AND url = ''").get().c
+      ).toBe(2);
+      expect(
+        mem
+          .prepare("SELECT COUNT(*) c FROM items WHERE project_id = 1 AND url = 'https://real.example.com/1'")
+          .get().c
+      ).toBe(1);
     });
 
     it('无重复数据时幂等，不误删', () => {
@@ -83,7 +111,7 @@ describe('items 表 (project_id, url) 唯一约束（LEOY-32）', () => {
       const db = getDb();
       const idx = db
         .prepare(
-          "SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_items_project_url'"
+          "SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'uniq_items_project_url'"
         )
         .all();
       expect(idx).toHaveLength(1);

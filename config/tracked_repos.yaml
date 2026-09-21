@@ -6,16 +6,103 @@
 #   enabled     — 是否纳入采集
 #   weight      — 在组织/整体健康分中的权重（相对值，越大越重要）
 #   labels      — 仅采集这些标签的 issue/PR；留空表示不限
+#
+# 默认监控目标：OpenAN 组织（https://github.com/project-openan）。
+# weight 按仓库实质分层：核心基础设施（registry / orchestration）最高，
+# SDK 次之，portal / governance 再次，docs / 站点 / demo / 安装器最低。
+# 这样分层是为了避免「近似空仓（docs / demo）以等权拖低组织分」却不自知。
+# 各档仅为相对重要性，评分侧如需纳入权重会在聚合时归一化，见 org_mapping.yaml。
 
 repos:
-  - repo: XunliYang/operation-dashboard
-    org: platform
+  # ---- 核心基础设施 ----
+  - repo: project-openan/registry-center
+    org: openan
+    enabled: true
+    weight: 3.0
+    labels: []
+  - repo: project-openan/orchestration-center
+    org: openan
+    enabled: true
+    weight: 3.0
+    labels: []
+
+  # ---- SDK ----
+  - repo: project-openan/a2a-t-sdk-python
+    org: openan
+    enabled: true
+    weight: 2.5
+    labels: []
+  - repo: project-openan/a2a-t-sdk-java
+    org: openan
+    enabled: true
+    weight: 2.5
+    labels: []
+  - repo: project-openan/workflow-engine-sdk-python
+    org: openan
+    enabled: true
+    weight: 2.5
+    labels: []
+  - repo: project-openan/workflow-engine-sdk-java
+    org: openan
+    enabled: true
+    weight: 2.5
+    labels: []
+
+  # ---- 门户与治理 ----
+  - repo: project-openan/openan-portal
+    org: openan
     enabled: true
     weight: 2.0
     labels: []
+  - repo: project-openan/governance
+    org: openan
+    enabled: true
+    weight: 2.0
+    labels: []
+  - repo: project-openan/a2a-t-prompt-templates-spec
+    org: openan
+    enabled: true
+    weight: 1.5
+    labels: []
+
+  # ---- 文档 / 站点 / 演示 / 安装器 ----
+  - repo: project-openan/docs
+    org: openan
+    enabled: true
+    weight: 1.0
+    labels: []
+  - repo: project-openan/project-openan.github.io
+    org: openan
+    enabled: true
+    weight: 1.0
+    labels: []
+  - repo: project-openan/openan-demo
+    org: openan
+    enabled: true
+    weight: 1.0
+    labels: []
+  - repo: project-openan/openan-installation
+    org: openan
+    enabled: true
+    weight: 1.0
+    labels: []
+
+  # project-openan/.github 为纯组织配置仓（org profile / 组织级 workflow 等），
+  # 不承载业务代码，默认排除；如需跟踪可显式加回。
+
+  # ---- 自测 / 冒烟项（不纳入默认采集） ----
+  # XunliYang/operation-dashboard 是本 monorepo 自身，Phase 0/1 的自测目标；
+  # 切换到 OpenAN 后保留为 enabled: false 的冒烟项。
+  - repo: XunliYang/operation-dashboard
+    org: platform
+    enabled: false
+    weight: 2.0
+    labels: []
+  # sentiment-monitor 是本 monorepo 内的子目录，并非独立 GitHub 仓库，
+  # GitHub API 会 404，Phase 1 不采集；等其成为独立仓库后再启用。
   - repo: XunliYang/sentiment-monitor
     org: platform
-    enabled: true
+    enabled: false
     weight: 1.0
     labels: []
 

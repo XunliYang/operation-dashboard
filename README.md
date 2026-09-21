@@ -2,7 +2,9 @@
 
 面向研发运营的多仓库数据看板：聚合仓库活跃度、成员贡献与舆情信号，输出可解释的健康分与趋势视图。
 
-本仓库是 monorepo，当前处于**架构设计 v2 · Phase 0（工程骨架）**：所有组件可运行、可验证，业务数据接入在 Phase 1–3。
+本仓库是 monorepo，当前处于**架构设计 v2 · Phase 1（GitHub 健康度 MVP）**：
+采集 → 存储 → 指标 → API → 页面的全链路已打通（Webhook 优先 + 定时增量兜底、
+五维度健康评分、看板 A 页面）。
 
 ## 目录结构
 
@@ -103,15 +105,26 @@ pytest tests -v
 cd collector
 python -m venv .venv && source .venv/bin/activate
 pip install -e '.[dev]'
-python -m collector.main   # Phase 0 只注册调度，不接 GitHub API
+python -m collector.main                 # 常驻：APScheduler 定时增量兜底
+python -m collector.main --run-once      # 单次：立即对 tracked_repos 跑一轮增量采集
 pytest tests -v
 ```
 
+采集器把 GitHub 事件流写入 PostgreSQL 事实表（`fact_commit` / `fact_pull_request` /
+`fact_issue` / `fact_review` / `fact_workflow_run` / `fact_repo_metric_daily`），
+并在 `collect_run` 记录每轮状态与 `rate_limit_remaining`。需要先由 API 侧建表：
+
+```bash
+cd api && OD_DATABASE_URL=postgresql://od:od_dev_password@localhost:5432/operation_dashboard \
+  python -m app.db.migrate
+```
+
+采集凭据经 `OD_GITHUB_TOKEN`（单 token）或 `OD_GITHUB_TOKENS`（逗号分隔 token 池）注入。
 未配置 Redis 时锁自动降级为 `NullLock`（单实例语义，跨实例互斥失效），日志会给出 warning。
 
 ## 配置
 
-`config/` 下四个 YAML 均为 Phase 0 占位，字段含义写在各自文件头部注释里：
+`config/` 下四个 YAML，字段含义写在各自文件头部注释里：
 
 | 文件 | 作用 |
 | --- | --- |
@@ -119,6 +132,18 @@ pytest tests -v
 | `org_mapping.yaml` | 组织/团队成员映射 |
 | `health_weights.yaml` | 健康分各维度权重、方向与分档阈值 |
 | `sentiment_mapping.yaml` | 情感极性区间、严重度权重、关键词兜底规则、告警阈值 |
+
+默认监控目标是 **OpenAN 组织**（https://github.com/project-openan）：
+`tracked_repos.yaml` 默认启用其 13 个公开仓库（`org_mapping.yaml` 的
+`default_org: openan`）；`project-openan/.github`（纯组织配置仓）默认排除，
+`XunliYang/*` 两项保留为 `enabled: false` 的冒烟/自测项。仓库 `weight` 按实质
+分层——registry / orchestration 等核心基础设施最高、SDK 次之、docs / 站点 / demo /
+安装器最低，避免近似空仓以等权拖低组织分。
+
+**配额约束**：13 个 OpenAN 仓库单轮采集约 130 请求，必须配置
+`OD_GITHUB_TOKEN`（单 token）或 `OD_GITHUB_TOKENS`（逗号分隔 token 池）；
+未认证配额仅 60 请求/小时，无法支撑一轮完整采集。细粒度 PAT 需授予所采仓库的
+`Contents`、`Issues`、`Pull requests` 读权限。
 
 ## 路由约定
 

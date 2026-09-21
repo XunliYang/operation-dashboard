@@ -34,6 +34,10 @@ services:
       OD_PORT: '8000'
       OD_CORS_ORIGINS: '["http://localhost:8080"]'
       OD_RATE_LIMIT_PER_MINUTE: '300'
+      OD_DATABASE_URL: postgresql://${POSTGRES_USER:-od}:${POSTGRES_PASSWORD:-od_dev_password}@postgres:5432/${POSTGRES_DB:-operation_dashboard}
+      OD_CONFIG_DIR: /app/config
+    volumes:
+      - ../config:/app/config:ro
     healthcheck:
       test: ['CMD', 'python', '-c', "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz').status==200 else 1)"]
       interval: 10s
@@ -55,9 +59,13 @@ services:
       OD_REDIS_URL: redis://redis:6379/0
       OD_CONFIG_DIR: /app/config
       OD_TIMEZONE: Asia/Shanghai
+      OD_DATABASE_URL: postgresql://${POSTGRES_USER:-od}:${POSTGRES_PASSWORD:-od_dev_password}@postgres:5432/${POSTGRES_DB:-operation_dashboard}
+      OD_GITHUB_TOKEN: ${OD_GITHUB_TOKEN:-}
     volumes:
       - ../config:/app/config:ro
     depends_on:
+      api:
+        condition: service_healthy
       redis:
         condition: service_healthy
     restart: unless-stopped

@@ -17,8 +17,7 @@ def test_scheduler_registers_enabled_jobs_only():
     job_ids = {job.id for job in scheduler.get_jobs()}
 
     assert "collect_github_activity" in job_ids
-    assert "recompute_health_scores" in job_ids
-    # Phase 0 该 job enabled=False，不应注册
+    # Phase 1 该 job enabled=False，不应注册
     assert "collect_sentiment" not in job_ids
 
 

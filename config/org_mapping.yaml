@@ -7,6 +7,24 @@
 #   repos       — 该组织下的仓库全名（可选，便于校验）
 
 orgs:
+  openan:
+    display: OpenAN
+    members: []   # OpenAN 成员从采集数据中识别，不在此静态列举
+    repos:
+      - project-openan/registry-center
+      - project-openan/orchestration-center
+      - project-openan/a2a-t-sdk-python
+      - project-openan/a2a-t-sdk-java
+      - project-openan/workflow-engine-sdk-python
+      - project-openan/workflow-engine-sdk-java
+      - project-openan/openan-portal
+      - project-openan/governance
+      - project-openan/a2a-t-prompt-templates-spec
+      - project-openan/docs
+      - project-openan/project-openan.github.io
+      - project-openan/openan-demo
+      - project-openan/openan-installation
+  # platform 键保留给 XunliYang/* 自测/冒烟项
   platform:
     display: 平台组
     members:
@@ -16,4 +34,4 @@ orgs:
       - XunliYang/sentiment-monitor
 
 # 未匹配到任何组织的仓库归入此组织
-default_org: platform
+default_org: openan

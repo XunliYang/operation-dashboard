@@ -124,7 +124,7 @@ cd api && OD_DATABASE_URL=postgresql://od:od_dev_password@localhost:5432/operati
 
 ## 配置
 
-`config/` 下四个 YAML 均为 Phase 0 占位，字段含义写在各自文件头部注释里：
+`config/` 下四个 YAML，字段含义写在各自文件头部注释里：
 
 | 文件 | 作用 |
 | --- | --- |
@@ -132,6 +132,18 @@ cd api && OD_DATABASE_URL=postgresql://od:od_dev_password@localhost:5432/operati
 | `org_mapping.yaml` | 组织/团队成员映射 |
 | `health_weights.yaml` | 健康分各维度权重、方向与分档阈值 |
 | `sentiment_mapping.yaml` | 情感极性区间、严重度权重、关键词兜底规则、告警阈值 |
+
+默认监控目标是 **OpenAN 组织**（https://github.com/project-openan）：
+`tracked_repos.yaml` 默认启用其 13 个公开仓库（`org_mapping.yaml` 的
+`default_org: openan`）；`project-openan/.github`（纯组织配置仓）默认排除，
+`XunliYang/*` 两项保留为 `enabled: false` 的冒烟/自测项。仓库 `weight` 按实质
+分层——registry / orchestration 等核心基础设施最高、SDK 次之、docs / 站点 / demo /
+安装器最低，避免近似空仓以等权拖低组织分。
+
+**配额约束**：13 个 OpenAN 仓库单轮采集约 130 请求，必须配置
+`OD_GITHUB_TOKEN`（单 token）或 `OD_GITHUB_TOKENS`（逗号分隔 token 池）；
+未认证配额仅 60 请求/小时，无法支撑一轮完整采集。细粒度 PAT 需授予所采仓库的
+`Contents`、`Issues`、`Pull requests` 读权限。
 
 ## 路由约定
 

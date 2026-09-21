@@ -10,6 +10,7 @@ const healthRouter = require('./api/health');
 const historyRouter = require('./api/history');
 const decisionsRouter = require('./api/decisions');
 const configRouter = require('./api/config');
+const hotspotsRouter = require('./api/hotspots');
 const schedulerRouter = require('./api/scheduler');
 const collectionRouter = require('./api/collection');
 const itemsRouter = require('./api/items');
@@ -29,6 +30,7 @@ app.get('/api/health', (req, res) => {
 
 app.use('/api/projects', projectsRouter);
 app.use('/api/projects/:id/health', healthRouter);
+app.use('/api/projects/:id/hotspots', hotspotsRouter);
 app.use('/api/projects/:id', historyRouter);
 app.use('/api/decisions', decisionsRouter);
 app.use('/api/config', configRouter);

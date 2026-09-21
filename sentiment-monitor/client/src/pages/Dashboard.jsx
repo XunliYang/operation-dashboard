@@ -12,7 +12,8 @@ import {
 import StatCard from '../components/StatCard';
 import HealthChart from '../components/HealthChart';
 import DecisionList from '../components/DecisionList';
-import { projectsApi, healthApi, decisionsApi, schedulerApi, collectionApi } from '../services/api';
+import TodayHotspots from '../components/TodayHotspots';
+import { projectsApi, healthApi, decisionsApi, schedulerApi, collectionApi, hotspotsApi } from '../services/api';
 
 function Dashboard() {
   const navigate = useNavigate();
@@ -29,6 +30,9 @@ function Dashboard() {
     trend: [],
   });
   const [projects, setProjects] = useState([]);
+  const [hotspots, setHotspots] = useState(null);
+  const [hotspotSummary, setHotspotSummary] = useState(null);
+  const [hotspotLoading, setHotspotLoading] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -51,6 +55,8 @@ function Dashboard() {
           trend: [],
         });
         setCollectionHistory([]);
+        setHotspots(null);
+        setHotspotSummary(null);
         return;
       }
 
@@ -80,11 +86,29 @@ function Dashboard() {
       }
       
       setCollectionHistory(collectionRes.data || []);
+
+      await loadHotspots(projectId);
     } catch (error) {
       console.error('加载数据失败:', error);
       message.error('加载数据失败');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadHotspots = async (projectId) => {
+    try {
+      setHotspotLoading(true);
+      const [listRes, summaryRes] = await Promise.all([
+        hotspotsApi.list(projectId, { limit: 10 }).catch(() => ({ data: null })),
+        hotspotsApi.summary(projectId).catch(() => ({ data: null })),
+      ]);
+      setHotspots(listRes.data);
+      setHotspotSummary(summaryRes.data);
+    } catch (error) {
+      console.error('加载今日热点失败:', error);
+    } finally {
+      setHotspotLoading(false);
     }
   };
 
@@ -128,6 +152,8 @@ function Dashboard() {
       }));
       
       setCollectionHistory(collectionRes.data || []);
+
+      await loadHotspots(projectId);
     } catch (error) {
       console.error('切换项目失败:', error);
     }
@@ -280,12 +306,20 @@ function Dashboard() {
 
       <Row gutter={[16, 16]} style={{ marginTop: '24px' }}>
         <Col xs={24} lg={16}>
-          <HealthChart data={stats.trend} />
+          <TodayHotspots
+            hotspots={hotspots}
+            summary={hotspotSummary}
+            loading={hotspotLoading}
+          />
         </Col>
         <Col xs={24} lg={8}>
           <DecisionList decisions={stats.decisions} onRefresh={loadData} />
         </Col>
       </Row>
+
+      <Card title="采集健康趋势" style={{ marginTop: '24px' }}>
+        <HealthChart data={stats.trend} />
+      </Card>
 
       <Card title="采集历史" style={{ marginTop: '24px' }}>
         <Table

@@ -190,3 +190,100 @@ body {
 .shell-content {
   padding: 24px;
 }
+
+/* —— 窄屏抽屉（<md，≤767px）：横向导航收进左侧抽屉 —— */
+
+.shell-menu-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  margin-left: auto;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--c-topbar-text);
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.shell-menu-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.shell-drawer {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+}
+
+.shell-drawer-mask {
+  position: absolute;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.45);
+}
+
+.shell-drawer-panel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: min(280px, 78vw);
+  padding: 16px;
+  background: var(--c-surface);
+  color: var(--c-text);
+  box-shadow: 0 12px 32px rgba(2, 6, 23, 0.25);
+  overflow-y: auto;
+}
+
+.shell-drawer-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 12px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--c-border);
+  color: var(--c-text2);
+}
+
+.shell-drawer-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.shell-drawer-item {
+  display: block;
+  padding: 10px 12px;
+  border-radius: 6px;
+  color: var(--c-text);
+  font-size: 14px;
+  text-decoration: none;
+}
+
+.shell-drawer-item:hover {
+  background: var(--c-surface2);
+}
+
+.shell-drawer-item.is-active {
+  background: var(--c-primary-soft);
+  color: var(--c-primary);
+  font-weight: 600;
+}
+
+/* —— 移动端（<md，≤767px）：工具区精简（保留主题/语言，身份入抽屉、健康徽标隐藏）+ 留白收缩 —— */
+
+@media (max-width: 767px) {
+  .shell-health {
+    display: none;
+  }
+
+  .shell-actions .shell-identity {
+    display: none;
+  }
+
+  .shell-content {
+    padding: 16px;
+  }
+}

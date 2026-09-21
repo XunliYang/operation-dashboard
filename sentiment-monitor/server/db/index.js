@@ -7,6 +7,24 @@ const SCHEMA_PATH = path.join(__dirname, 'schema.sql');
 
 let db = null;
 
+/**
+ * LEOY-32：为 items 表补 (project_id, url) 唯一索引，让 collector.js 三处
+ * `INSERT OR IGNORE INTO items` 真正按 URL 去重。
+ *
+ * 历史库可能已存在同 URL 重复条目，直接建唯一索引会失败，因此先清理重复行，
+ * 保留 id 最小（最早采集）的一条。幂等：无重复时不删任何行，且
+ * `CREATE UNIQUE INDEX IF NOT EXISTS` 可安全重入。
+ */
+function migrateItemsUniqueIndex(database) {
+  database.exec(`
+    DELETE FROM items
+    WHERE id NOT IN (SELECT MIN(id) FROM items GROUP BY project_id, url)
+  `);
+  database.exec(
+    'CREATE UNIQUE INDEX IF NOT EXISTS idx_items_project_url ON items(project_id, url)'
+  );
+}
+
 function getDb() {
   if (!db) {
     const dataDir = path.dirname(DB_PATH);
@@ -22,6 +40,9 @@ function getDb() {
     
     const schema = fs.readFileSync(SCHEMA_PATH, 'utf-8');
     db.exec(schema);
+
+    // 迁移：items 表 (project_id, url) 唯一索引（LEOY-32）
+    migrateItemsUniqueIndex(db);
     
     console.log('[db] 数据库初始化完成');
   }
@@ -35,4 +56,4 @@ function closeDb() {
   }
 }
 
-module.exports = { getDb, closeDb };
+module.exports = { getDb, closeDb, migrateItemsUniqueIndex };

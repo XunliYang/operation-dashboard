@@ -1,6 +1,8 @@
-"""Job 注册表与实现：GitHub 增量采集。
+"""Job 注册表与实现：GitHub 采集（手动 queued 消费 + 定时增量兜底）。
 
-- `collect_github_activity`：定时增量兜底（Webhook 是实时主通道）。
+- `collect_github_activity`：先消费 `POST /admin/collect` 落库的 queued 记录
+  （`github_backfill` 有界回填 / `github_incremental` 增量），再对
+  tracked_repos.yaml 逐仓库做增量兜底（配额耗尽时中断本轮）。
 - 健康分由 API 在读取时惰性计算并持久化，collector 不重复实现评分。
 - 舆情采集 Phase 3 启用。
 """
@@ -51,6 +53,64 @@ def _reset_eta(client: GitHubClient) -> str | None:
         return None
     wait = seconds_until_reset(state.reset_epoch)
     return None if wait is None else f"{wait:.0f}s"
+
+
+def _collect_scope(
+    conn,
+    collector: GitHubCollector,
+    settings,
+    repo_id: int | None,
+    *,
+    full_backfill: bool = False,
+) -> dict | None:
+    """采集给定 repo_id（None 表示全部追踪仓库），返回最后一次 collect_repo 结果。
+
+    `full_backfill` 透传给 `collect_repo`：True 时忽略增量游标做有界回填。
+    """
+    if repo_id is not None:
+        ref = db.repo_ref(conn, repo_id=repo_id)
+        if ref is None:
+            raise RuntimeError(f"repo not found: repo_id={repo_id}")
+        owner, name = ref
+        return collector.collect_repo(owner, name, full_backfill=full_backfill)
+    result: dict | None = None
+    for repo in load_tracked_repos(settings.config_dir):
+        owner, name = repo["repo"].split("/", 1)
+        result = collector.collect_repo(owner, name, full_backfill=full_backfill)
+    return result
+
+
+def _drain_queued(conn, collector: GitHubCollector, settings) -> None:
+    """消费 `POST /admin/collect` 落库的 queued 记录，逐条执行并把状态推进到终态。
+
+    手动触发与定时兜底共用同一进程：queued 请求优先执行，随后照常跑全量兜底。
+    `job` 决定采集模式：`github_backfill` → 有界回填（full_backfill=True），
+    `github_incremental` → 增量（full_backfill=False）。
+    """
+    for run_id, job, repo_id in db.claim_queued_collect_runs(conn):
+        db.mark_collect_run_running(conn, run_id=run_id)
+        conn.commit()
+        try:
+            result = _collect_scope(
+                conn,
+                collector,
+                settings,
+                repo_id,
+                full_backfill=(job == "github_backfill"),
+            )
+            db.finish_collect_run(
+                conn,
+                run_id=run_id,
+                status="success",
+                rate_limit_remaining=result.get("rate_limit_remaining") if result else None,
+            )
+            conn.commit()
+            logger.info("queued collect run {} succeeded", run_id)
+        except Exception as exc:  # noqa: BLE001 — 单条失败不影响其余 queued
+            conn.rollback()
+            db.finish_collect_run(conn, run_id=run_id, status="failed", error=str(exc)[:1000])
+            conn.commit()
+            logger.exception("queued collect run {} failed", run_id)
 
 
 def collect_repos(
@@ -115,7 +175,7 @@ def collect_repos(
 
 
 def collect_github_activity() -> None:
-    """对 tracked_repos.yaml 里的每个仓库跑一次增量采集，逐仓库记 collect_run。"""
+    """先消费手动触发的 queued 请求，再对 tracked_repos.yaml 逐仓库做增量兜底采集。"""
     settings = get_settings()
     tokens = TokenPool(settings.github_token_list())
     if not tokens:
@@ -129,12 +189,15 @@ def collect_github_activity() -> None:
         max_retries=settings.max_retries,
     )
 
-    repos = load_tracked_repos(settings.config_dir)
-    if not repos:
-        logger.warning("tracked_repos.yaml 无启用的仓库，跳过采集")
-        return
-
     with db.connect_db(settings.database_url) as conn:
+        collector = GitHubCollector(client, conn, backfill_days=settings.backfill_days)
+        _drain_queued(conn, collector, settings)
+
+        repos = load_tracked_repos(settings.config_dir)
+        if not repos:
+            logger.warning("tracked_repos.yaml 无启用的仓库，跳过兜底采集")
+            return
+
         stats = collect_repos(repos, client, conn, backfill_days=settings.backfill_days)
         if stats["skipped"]:
             logger.warning("本轮因配额耗尽跳过 {} 个仓库", stats["skipped"])

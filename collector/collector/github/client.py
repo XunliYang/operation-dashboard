@@ -77,6 +77,7 @@ class GitHubClient:
         self.backoff_jitter = backoff_jitter
         self._etags: dict[str, str] = {}
         self._cache: dict[str, Any] = {}
+        self._page_cache: dict[str, tuple[Any, str | None]] = {}
         self._sleep = sleep_fn or time.sleep
 
         # 最近一次响应的配额状态（用于写 collect_run）
@@ -179,6 +180,37 @@ class GitHubClient:
             self._cache[url] = body
         return body
 
+    def _page(self, url: str, params: dict | None) -> tuple[Any, str | None]:
+        """单页 GET：复用 ETag/If-None-Match，304 命中时返回缓存体与缓存 Link。
+
+        缓存未命中时回退为一次无条件重拉，绝不静默把 304 当空列表丢弃数据。
+        返回 `(body, link_header)`。
+        """
+        headers: dict[str, str] = {}
+        etag = self._etags.get(url)
+        if etag:
+            headers["If-None-Match"] = etag
+        resp = self._request_robust("GET", url, params=params, headers=headers)
+        self._update_rate_limit(resp)
+        self._throttle_if_low()
+        if resp.status_code == 304:
+            cached = self._page_cache.get(url)
+            if cached is not None:
+                return cached
+            # 缓存未命中（如 ETag 与缓存不同源）：回退为一次无条件重拉
+            resp = self._request_robust("GET", url, params=params)
+            self._update_rate_limit(resp)
+            self._throttle_if_low()
+        if resp.status_code >= 400:
+            raise GitHubApiError(resp.status_code, resp.text[:200])
+        body = resp.json()
+        link = resp.headers.get("Link")
+        new_etag = resp.headers.get("ETag")
+        if new_etag:
+            self._etags[url] = new_etag
+            self._page_cache[url] = (body, link)
+        return body, link
+
     def paged(
         self,
         url: str,
@@ -186,38 +218,40 @@ class GitHubClient:
         *,
         max_pages: int = 40,
         items_key: str | None = None,
+        stop_after: Callable[[list[dict]], tuple[list[dict], bool]] | None = None,
     ) -> list[dict]:
-        """翻页拉取（Link 头驱动）；返回合并后的列表。支持 since 增量。
+        """翻页拉取（Link 头驱动）；返回合并后的列表。支持 since 增量与 ETag/304。
 
         `items_key` 用于响应体是对象（如 actions/runs 返回
         `{total_count, workflow_runs}`）时，从对象中取数组字段。
+
+        `stop_after(page_items) -> (kept, stop)` 支持按游标早停：对按
+        `sort=updated&direction=desc` 排序的列表，一旦页面时间戳早于上次游标
+        即可 `stop`，并只保留游标之后的较新条目，避免整表重拉。
         """
         items: list[dict] = []
         params = dict(params or {})
         current = url
         for _ in range(max_pages):
-            resp = self._request_robust("GET", current, params=params)
-            self._update_rate_limit(resp)
-            self._throttle_if_low()
-            if resp.status_code == 304:
-                body = self._cache.get(current)
-            elif resp.status_code >= 400:
-                raise GitHubApiError(resp.status_code, resp.text[:200])
-            else:
-                body = resp.json()
-                etag = resp.headers.get("ETag")
-                if etag:
-                    self._etags[current] = etag
-                    self._cache[current] = body
+            body, link = self._page(current, params)
             if isinstance(body, dict) and items_key:
-                items.extend(body.get(items_key, []) or [])
+                page_items: list[dict] = body.get(items_key, []) or []
             elif isinstance(body, list):
-                items.extend(body)
-            nxt = parse_next_link(resp.headers.get("Link"))
+                page_items = body
+            else:
+                page_items = []
+            if stop_after is not None:
+                kept, stop = stop_after(page_items)
+                items.extend(kept)
+                if stop:
+                    break
+            else:
+                items.extend(page_items)
+            nxt = parse_next_link(link)
             if not nxt:
                 break
             current = nxt
-            params = {}
+            params = None  # 后续页面参数已编码在 Link URL 中；传 None 避免空 dict 覆盖其 query
         return items
 
     # ---- GraphQL ----

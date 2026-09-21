@@ -40,6 +40,7 @@
 ## 快速开始（Docker Compose）
 
 ```bash
+cp deploy/.env.example deploy/.env   # 必填 OD_GITHUB_TOKEN（见文件内注释）
 docker compose -f deploy/docker-compose.yml up --build
 ```
 

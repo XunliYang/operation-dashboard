@@ -23,7 +23,7 @@ export function OverviewPage() {
     <div>
       <h1 className="mb-6 text-xl font-semibold">{t('overview.title')}</h1>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid min-w-0 gap-4 lg:grid-cols-2">
         <Card title="仓库健康分" description="各被监控项目最新综合健康分（0–100）">
           {repos.isLoading ? (
             <p className="text-sm text-slate-500">{t('common.loading')}</p>
@@ -37,8 +37,8 @@ export function OverviewPage() {
         <Card title="快速入口">
           <ul className="space-y-2 text-sm">
             {repos.data?.map((r) => (
-              <li key={r.id}>
-                <Link className="text-brand-700 hover:underline" to={`/repos/${r.id}`}>
+              <li key={r.id} className="min-w-0">
+                <Link className="block break-words text-brand-700 hover:underline" to={`/repos/${r.id}`}>
                   {r.full_name} →
                 </Link>
               </li>

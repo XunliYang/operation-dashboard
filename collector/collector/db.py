@@ -105,28 +105,33 @@ def upsert_pull_request(
     state: str,
     title: str | None,
     created_at: datetime,
+    updated_at: datetime | None,
     first_review_at: datetime | None,
     merged_at: datetime | None,
     closed_at: datetime | None,
-    review_count: int,
+    review_count: int | None,
     additions: int | None,
     deletions: int | None,
 ) -> None:
+    # review_count / first_review_at 只在「本轮真正拉取了 review」时覆盖：
+    # 未拉取时传 None，SQL 用 COALESCE 保留旧值。review_count 的合法值包含
+    # 真实的 0（「已拉取但确无 review」），不能用 0 作为「未拉取」哨兵。
     conn.execute(
         "INSERT INTO fact_pull_request"
-        " (repo_id, pr_number, author_id, state, title, created_at, first_review_at, merged_at, closed_at,"
-        "  review_count, additions, deletions)"
-        " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+        " (repo_id, pr_number, author_id, state, title, created_at, updated_at,"
+        "  first_review_at, merged_at, closed_at, review_count, additions, deletions)"
+        " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
         " ON CONFLICT (repo_id, pr_number, created_at) DO UPDATE SET"
         "   state = EXCLUDED.state,"
-        "   first_review_at = EXCLUDED.first_review_at,"
+        "   updated_at = EXCLUDED.updated_at,"
+        "   first_review_at = COALESCE(EXCLUDED.first_review_at, fact_pull_request.first_review_at),"
         "   merged_at = EXCLUDED.merged_at,"
         "   closed_at = EXCLUDED.closed_at,"
-        "   review_count = EXCLUDED.review_count,"
+        "   review_count = COALESCE(EXCLUDED.review_count, fact_pull_request.review_count),"
         "   additions = EXCLUDED.additions,"
         "   deletions = EXCLUDED.deletions",
-        (repo_id, pr_number, author_id, state, title, created_at, first_review_at, merged_at, closed_at,
-         review_count, additions, deletions),
+        (repo_id, pr_number, author_id, state, title, created_at, updated_at,
+         first_review_at, merged_at, closed_at, review_count, additions, deletions),
     )
 
 
@@ -246,3 +251,47 @@ def finish_collect_run(
         " WHERE run_id=%s",
         (status, rate_limit_remaining, error, run_id),
     )
+
+
+def pulls_cursor(conn: Connection, *, repo_id: int) -> datetime | None:
+    """pulls 增量游标：该仓库已摄入 PR 的最大 `updated_at`。
+
+    首轮（表空）返回 None，即全量回填；之后按 `sort=updated&direction=desc`
+    早停，只拉取游标之后更新的 PR，避免整表重拉与逐 PR reviews 的 N+1。
+    """
+    row = conn.execute(
+        "SELECT MAX(updated_at) FROM fact_pull_request WHERE repo_id = %s", (repo_id,)
+    ).fetchone()
+    if row and row[0]:
+        return row[0]
+    return None
+
+
+def claim_queued_collect_runs(conn: Connection) -> list[tuple[int, str, int | None]]:
+    """认领 `POST /admin/collect` 落库的 queued 请求（只取本采集器认识的 job）。
+
+    用 `FOR UPDATE SKIP LOCKED` 避免多实例并发重复认领；调度器另有 redis 锁兜底。
+    """
+    rows = conn.execute(
+        "SELECT run_id, job, repo_id FROM collect_run"
+        " WHERE status = 'queued' AND job IN ('github_incremental', 'github_backfill')"
+        " ORDER BY run_id FOR UPDATE SKIP LOCKED"
+    ).fetchall()
+    return [(r[0], r[1], r[2]) for r in rows]
+
+
+def mark_collect_run_running(conn: Connection, *, run_id: int) -> None:
+    conn.execute(
+        "UPDATE collect_run SET status = 'running', started_at = now() WHERE run_id = %s",
+        (run_id,),
+    )
+
+
+def repo_ref(conn: Connection, *, repo_id: int) -> tuple[str, str] | None:
+    """repo_id → (owner, name)；不存在返回 None。"""
+    row = conn.execute(
+        "SELECT owner, name FROM dim_repo WHERE repo_id = %s", (repo_id,)
+    ).fetchone()
+    if row is None:
+        return None
+    return row[0], row[1]

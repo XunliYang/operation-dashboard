@@ -86,14 +86,16 @@ class GitHubCollector:
     def _ingest_pull_request(self, repo_id: int, owner: str, name: str, pr: dict) -> None:
         number = pr["number"]
         created_at = db.parse_dt(pr.get("created_at")) or _utcnow()
+        updated_at = db.parse_dt(pr.get("updated_at"))
         login, gh_id = _user(pr.get("user"))
         author_id = db.upsert_contributor(
             self.conn, gh_login=login, gh_id=gh_id, display_name=login, seen_at=created_at
         )
 
-        review_count = 0
+        # review_count 语义：None = 本轮未拉取 review（SQL 侧保留旧值）；
+        # 0..N = 已拉取且条数为 N（含真实的 0）。不能用 0 当「未拉取」哨兵。
+        review_count: int | None = None
         first_review_at: datetime | None = None
-        updated_at = db.parse_dt(pr.get("updated_at"))
         if updated_at is None or updated_at >= self._review_cutoff:
             reviews = self.client.get_json(f"/repos/{owner}/{name}/pulls/{number}/reviews")
             review_count = len(reviews)
@@ -124,6 +126,7 @@ class GitHubCollector:
             state=pr.get("state", "open"),
             title=pr.get("title"),
             created_at=created_at,
+            updated_at=updated_at,
             first_review_at=first_review_at,
             merged_at=db.parse_dt(pr.get("merged_at")),
             closed_at=db.parse_dt(pr.get("closed_at")),
@@ -179,8 +182,13 @@ class GitHubCollector:
             return row[0]
         return _utcnow() - timedelta(days=self.backfill_days)
 
-    def collect_repo(self, owner: str, name: str) -> dict:
-        """增量采集单个仓库，返回统计与配额余量。失败抛异常，由调用方记 collect_run。"""
+    def collect_repo(self, owner: str, name: str, *, full_backfill: bool = False) -> dict:
+        """采集单个仓库，返回统计与配额余量。失败抛异常，由调用方记 collect_run。
+
+        `full_backfill=True` 走有界回填：忽略增量游标（commits 不带 `since`、pulls
+        不做早停），按 client 的 `max_pages` 上限重拉，属重配额操作，仅 `POST
+        /admin/collect` 的 `full_backfill=true` 触发；默认 False 走增量（定时兜底）。
+        """
         meta = self.client.get_json(f"/repos/{owner}/{name}")
         repo_id = db.upsert_repo(
             self.conn,
@@ -194,16 +202,36 @@ class GitHubCollector:
         since = self._commits_cursor(repo_id)
         since_iso = since.isoformat()
 
-        commits = self.client.paged(
-            f"/repos/{owner}/{name}/commits", {"since": since_iso, "per_page": 100}
-        )
+        if full_backfill:
+            commits = self.client.paged(f"/repos/{owner}/{name}/commits", {"per_page": 100})
+        else:
+            commits = self.client.paged(
+                f"/repos/{owner}/{name}/commits", {"since": since_iso, "per_page": 100}
+            )
         for c in commits:
             self._ingest_commit(repo_id, c)
-        logger.info("repo {}/{}: {} commits since {}", owner, name, len(commits), since_iso)
+        if full_backfill:
+            logger.info("repo {}/{}: {} commits (bounded backfill)", owner, name, len(commits))
+        else:
+            logger.info("repo {}/{}: {} commits since {}", owner, name, len(commits), since_iso)
 
+        pulls_cursor = db.pulls_cursor(self.conn, repo_id=repo_id)
+
+        def _stop_stale(page_items: list[dict]) -> tuple[list[dict], bool]:
+            """按 `sort=updated&direction=desc` 早停：一旦遇到早于游标的 PR 即停。"""
+            kept: list[dict] = []
+            for p in page_items:
+                u = db.parse_dt(p.get("updated_at"))
+                if u is not None and pulls_cursor is not None and u < pulls_cursor:
+                    return kept, True
+                kept.append(p)
+            return kept, False
+
+        stop_after = None if full_backfill else (_stop_stale if pulls_cursor is not None else None)
         pulls = self.client.paged(
             f"/repos/{owner}/{name}/pulls",
             {"state": "all", "sort": "updated", "direction": "desc", "per_page": 100},
+            stop_after=stop_after,
         )
         open_prs = 0
         for p in pulls:

@@ -3,13 +3,17 @@
 # 字段说明：
 #   key         — 组织唯一键，`tracked_repos.yaml` 的 org 字段引用它
 #   display     — 展示名
-#   members     — 成员 GitHub login 列表，用于成员维度聚合
+#   members     — 成员 GitHub login 列表，用于成员维度聚合（manual_yaml 最权威来源）
+#   companies   — 公司名别名（GitHub profile 的 company 字段匹配，大小写不敏感，双向子串命中）
+#   email_domains — 邮箱域名（小写），用于邮箱域名推断（email_domain 来源，confidence ≈0.6）
 #   repos       — 该组织下的仓库全名（可选，便于校验）
 
 orgs:
   openan:
     display: OpenAN
     members: []   # OpenAN 成员从采集数据中识别，不在此静态列举
+    companies: []
+    email_domains: []
     repos:
       - project-openan/registry-center
       - project-openan/orchestration-center
@@ -29,6 +33,8 @@ orgs:
     display: 平台组
     members:
       - XunliYang
+    companies: []
+    email_domains: []
     repos:
       - XunliYang/operation-dashboard
       - XunliYang/sentiment-monitor

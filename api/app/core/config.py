@@ -36,6 +36,11 @@ class Settings(BaseSettings):
     # 健康分窗口（天）：指标按最近 N 天的滚动窗口计算
     health_window_days: int = 30
 
+    # 邮箱哈希盐：dim_contributor.email_hash = sha256(salt + lower(email))。
+    # 生产环境务必通过 OD_EMAIL_HASH_SALT 覆盖为随机值；盐一旦确定不可更改
+    # （否则历史哈希全部失效、无法按邮箱聚类身份）。
+    email_hash_salt: str = "operation-dashboard-dev-salt"
+
     @property
     def is_dev(self) -> bool:
         return self.env.lower() in {"dev", "local", "development"}

@@ -18,6 +18,8 @@ from app.middleware.request_id import RequestIdMiddleware
 from app.middleware.size_limit import SizeLimitMiddleware
 from app.middleware.timeout import TimeoutMiddleware
 from app.routers.admin import router as admin_router
+from app.routers.people import admin_router as people_admin_router
+from app.routers.people import router as people_router
 from app.routers.repos import router as repos_router
 
 # 不限流的路径
@@ -63,6 +65,8 @@ def create_app() -> FastAPI:
     app.include_router(health_router)
     app.include_router(repos_router)
     app.include_router(admin_router)
+    app.include_router(people_router)
+    app.include_router(people_admin_router)
     return app
 
 

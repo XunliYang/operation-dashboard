@@ -6,7 +6,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 
 import { translate } from '@/core/i18n';
 import { ShellApp } from '@/shell/ShellApp';
-import { assemble } from '@/shell/runtime';
+import { assemble, buildShellRoutes } from '@/shell/runtime';
 import type { NavItem, Plugin } from '@/shell/contract';
 
 function makeQueryClient() {
@@ -26,7 +26,7 @@ function renderAssembly(pluginList: Plugin[], path: string) {
             headerActions={(assembly.slots['header.action'] ?? []).map((s) => s.node)}
           />
         ),
-        children: assembly.routes,
+        children: buildShellRoutes(assembly),
       },
     ],
     { initialEntries: [path] },
@@ -139,5 +139,69 @@ describe('shell runtime', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /更多/ }));
     expect(screen.getByText('item7.title')).toBeInTheDocument();
+  });
+
+  it('删除 order 最小的首页插件后，/ 落到存活的首个插件（不出现 404）', () => {
+    const surviving: Plugin = {
+      id: 'people',
+      order: 30,
+      titleKey: 'people.title',
+      register(ctx) {
+        ctx.registerNavItem({ to: '/people', titleKey: 'people.title' });
+        ctx.registerRoute({ path: 'people', element: <div>PEOPLE PAGE</div> });
+      },
+    };
+    renderAssembly([surviving], '/');
+    expect(screen.getByText('PEOPLE PAGE')).toBeInTheDocument();
+    expect(screen.queryByText('页面不存在')).not.toBeInTheDocument();
+  });
+
+  it('新增 order 更小的插件后，/ 指向该新插件', () => {
+    const makeHomePlugin = (id: string, order: number, path: string, label: string): Plugin => ({
+      id,
+      order,
+      titleKey: `${id}.title`,
+      register(ctx) {
+        ctx.registerNavItem({ to: `/${path}`, titleKey: `${id}.title` });
+        ctx.registerRoute({ path, element: <div>{label}</div> });
+      },
+    });
+    renderAssembly(
+      [makeHomePlugin('fresh', 1, 'fresh', 'FRESH PAGE'), makeHomePlugin('overview', 10, 'overview', 'OLD PAGE')],
+      '/',
+    );
+    expect(screen.getByText('FRESH PAGE')).toBeInTheDocument();
+    expect(screen.queryByText('OLD PAGE')).not.toBeInTheDocument();
+  });
+
+  it('空插件集下 / 渲染 404 兜底页且不崩', () => {
+    renderAssembly([], '/');
+    expect(screen.getByText('页面不存在')).toBeInTheDocument();
+  });
+
+  it('导航项缺少 to 被拦截', () => {
+    const plugin: Plugin = {
+      id: 'x',
+      order: 1,
+      titleKey: 'x.title',
+      register(ctx) {
+        ctx.registerNavItem({ to: '', titleKey: 'x.title' });
+      },
+    };
+    expect(() => assemble([plugin], makeQueryClient())).toThrow(/缺少 to/);
+  });
+
+  it('导航项 to 重复被拦截（规范化后比较，报错带插件 id）', () => {
+    const makeNavPlugin = (id: string): Plugin => ({
+      id,
+      order: 1,
+      titleKey: `${id}.title`,
+      register(ctx) {
+        ctx.registerNavItem({ to: '/dup', titleKey: `${id}.title` });
+      },
+    });
+    expect(() => assemble([makeNavPlugin('a'), makeNavPlugin('b')], makeQueryClient())).toThrow(
+      /导航项 to "dup" 冲突：插件 "a" 与 "b" 重复注册/,
+    );
   });
 });

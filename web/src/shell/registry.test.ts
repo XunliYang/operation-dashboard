@@ -40,6 +40,15 @@ describe('registry', () => {
     ).toThrow(/重复/);
   });
 
+  it('插件 order 并列被拦截', () => {
+    expect(() =>
+      validateAndSort({
+        'x.ts': { default: plugin({ id: 'a', order: 10 }) },
+        'y.ts': { default: plugin({ id: 'b', order: 10 }) },
+      }),
+    ).toThrow(/order 10 与插件 "a" 相同/);
+  });
+
   it('缺少默认导出被拦截', () => {
     expect(() => validateAndSort({ 'x.ts': {} })).toThrow(RegistryValidationError);
   });

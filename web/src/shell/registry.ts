@@ -23,6 +23,7 @@ export class RegistryValidationError extends Error {
 export function validateAndSort(rawModules: Record<string, RawModule>): Plugin[] {
   const plugins: Plugin[] = [];
   const ids = new Set<string>();
+  const orders = new Map<number, string>();
 
   for (const [path, mod] of Object.entries(rawModules)) {
     const plugin = mod?.default;
@@ -44,11 +45,20 @@ export function validateAndSort(rawModules: Record<string, RawModule>): Plugin[]
     if (typeof p.order !== 'number') {
       throw new RegistryValidationError(path, `插件 "${id}" 缺少数值 order`);
     }
+    // order 决定导航与首页顺序；并列会让顺序依赖 `import.meta.glob` 的目录扫描结果，
+    // 因此显式报错，要求插件各自声明不同 order 作为决定性 tie-break。
+    if (orders.has(p.order)) {
+      throw new RegistryValidationError(
+        path,
+        `插件 "${id}" 的 order ${p.order} 与插件 "${orders.get(p.order)}" 相同（并列会依赖目录扫描顺序，请显式区分）`,
+      );
+    }
     if (typeof p.register !== 'function') {
       throw new RegistryValidationError(path, `插件 "${id}" 缺少 register(ctx)`);
     }
 
     ids.add(id);
+    orders.set(p.order, id);
     plugins.push(plugin as Plugin);
   }
 

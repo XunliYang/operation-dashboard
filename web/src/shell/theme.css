@@ -71,7 +71,7 @@ body {
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
-  color: #ffffff;
+  color: var(--c-topbar-text);
 }
 
 .shell-logo {

@@ -12,9 +12,10 @@
 .
 ├── web/                  # 前端：React 19 + TS + Vite + react-router 7 + Zustand + Tailwind v4 + Recharts
 │   └── src/
-│       ├── core/         # api 客户端、stores、types、i18n、router
+│       ├── core/         # api 客户端、stores、types、i18n（共享契约层）
+│       ├── shell/        # 微内核壳层：插件契约、装配、布局、主题、通用组件
 │       ├── components/   # ui / charts / layout 复用组件
-│       └── features/     # 按页面切分：overview / repos / people / sentiment / settings
+│       └── plugins/      # 子模块插件（自注册）：overview / repos / people / sentiment / settings
 ├── api/                  # 后端：Python 3.12 + FastAPI + Pydantic v2 + loguru
 │   └── app/
 │       ├── api/          # 路由（/healthz）
@@ -26,6 +27,15 @@
 ├── sentiment-monitor/    # 既有舆情组件（独立子项目，不在本 monorepo 中改动）
 └── .github/workflows/    # CI：lint / test / build
 ```
+
+## 新增一个子模块（插件）
+
+新增或删除一个子模块 = 增删 `web/src/plugins/<id>/` 目录，内核（`shell/`、`core/`）代码不动：
+
+1. 新建 `web/src/plugins/<id>/index.ts`，默认导出一个 `Plugin`（`id` / `order` / `titleKey` / `register(ctx)`）。
+2. 在 `register(ctx)` 里调用 `registerRoute` / `registerNavItem` / `registerMessages`（词条 key 统一带 `<id>.` 前缀）。
+3. 词条放同目录 `i18n.ts`、页面放 `pages/`；数据请求复用 `@/core/api`，禁止直接 `fetch`。
+4. 重新 `npm run build` / `npm run dev`，插件即被自动装配，无需改任何内核文件。
 
 ## 快速开始（Docker Compose）
 

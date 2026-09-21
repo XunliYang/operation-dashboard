@@ -1,0 +1,192 @@
+/*
+ * 壳层设计令牌 + 顶栏样式。
+ *
+ * 设计令牌对齐参考站 47.236.98.226:9002（React + AntD 5 + Tailwind 4）的 CSS 变量主题体系，
+ * 默认主题 ocean 取值照抄；只抄令牌与信息设计，不引入 antd。
+ *
+ * 主题切换通过在 <html> 上写 data-theme 实现：默认 ocean，本 issue 预留机制并提供
+ * 一个 midnight 暗色变体用于验证「壳层换肤、插件代码零改动」。
+ */
+
+:root,
+[data-theme='ocean'] {
+  --c-page: #f1f5f9;
+  --c-surface: #ffffff;
+  --c-surface2: #f8fafc;
+  --c-border: #e2e8f0;
+  --c-border2: #f1f5f9;
+  --c-border-input: #cbd5e1;
+  --c-text: #0f172a;
+  --c-text2: #1e293b;
+  --c-text3: #64748b;
+  --c-topbar: #0f172a;
+  --c-topbar-text: #cbd5e1;
+  --c-topbar-active: #1e293b;
+  --c-primary: #2563eb;
+  --c-primary-hover: #1d4ed8;
+  --c-primary-soft: #eff6ff;
+}
+
+[data-theme='midnight'] {
+  --c-page: #0b1120;
+  --c-surface: #111827;
+  --c-surface2: #1f2937;
+  --c-border: #1f2937;
+  --c-border2: #111827;
+  --c-border-input: #374151;
+  --c-text: #f1f5f9;
+  --c-text2: #e2e8f0;
+  --c-text3: #94a3b8;
+  --c-topbar: #070b14;
+  --c-topbar-text: #94a3b8;
+  --c-topbar-active: #1e293b;
+  --c-primary: #3b82f6;
+  --c-primary-hover: #60a5fa;
+  --c-primary-soft: #1e293b;
+}
+
+body {
+  margin: 0;
+  background: var(--c-page);
+  color: var(--c-text);
+}
+
+/* —— 横向顶栏：56px、sticky、深色 —— */
+
+.shell-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: 56px;
+  padding: 0 16px;
+  background: var(--c-topbar);
+  color: var(--c-topbar-text);
+}
+
+.shell-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  color: #ffffff;
+}
+
+.shell-logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: var(--c-primary);
+  color: #ffffff;
+  font-size: 14px;
+}
+
+.shell-app-name {
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.shell-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.shell-nav-item {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--c-topbar-text);
+  font-size: 14px;
+  font-family: inherit;
+  line-height: 1.4;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.shell-nav-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.shell-nav-item.is-active {
+  background: var(--c-topbar-active);
+  color: #ffffff;
+}
+
+.shell-more {
+  position: relative;
+}
+
+.shell-more-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 140px;
+  padding: 6px;
+  border-radius: 8px;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  box-shadow: 0 10px 24px rgba(2, 6, 23, 0.15);
+  z-index: 40;
+}
+
+.shell-more-item {
+  display: block;
+  padding: 8px 10px;
+  border-radius: 6px;
+  color: var(--c-text);
+  font-size: 14px;
+  text-decoration: none;
+}
+
+.shell-more-item:hover {
+  background: var(--c-primary-soft);
+  color: var(--c-primary);
+}
+
+.shell-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.shell-action-btn {
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--c-topbar-text);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.shell-action-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.shell-identity {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--c-primary-soft);
+  color: var(--c-primary);
+  font-size: 13px;
+}
+
+.shell-content {
+  padding: 24px;
+}

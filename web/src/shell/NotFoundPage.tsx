@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { PageHeader } from '@/components/ui/PageHeader';
 
+/** 未知路由兜底页（壳层所有，任何插件都不得覆盖）。 */
 export function NotFoundPage() {
   return (
     <div>

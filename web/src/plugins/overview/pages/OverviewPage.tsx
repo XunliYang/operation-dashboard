@@ -45,12 +45,12 @@ export function OverviewPage() {
             ))}
             <li>
               <Link className="text-brand-700 hover:underline" to="/sentiment">
-                {t('nav.sentiment')} →
+                {t('overview.quick.sentiment')} →
               </Link>
             </li>
             <li>
               <Link className="text-brand-700 hover:underline" to="/settings">
-                {t('nav.settings')} →
+                {t('overview.quick.settings')} →
               </Link>
             </li>
           </ul>

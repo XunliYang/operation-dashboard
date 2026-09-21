@@ -1,7 +1,9 @@
 """管理路由（`/admin`）：手动触发采集与采集运行历史。
 
-`POST /admin/collect` 只创建 `collect_run(status=queued)` 并返回 run_id，
-实际采集由 collector 的增量 job 消费 queued 记录后执行（Webhook 优先、定时兜底）。
+`POST /admin/collect` 只创建 `collect_run(status=queued)` 并返回 run_id，实际采集由
+collector 的兜底 job 消费 queued 记录后执行：`full_backfill=false` 走增量（since
+游标 + pulls 早停），`full_backfill=true` 走有界回填（忽略增量游标、按 `max_pages`
+上限重拉，重配额操作，默认关闭）。
 """
 
 from __future__ import annotations
@@ -20,7 +22,9 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 
 class CollectRequest(BaseModel):
     repo: str | None = None          # "owner/name"；缺省表示全部追踪仓库
-    full_backfill: bool = False      # true 走 github_backfill，否则 github_incremental
+    # true 触发有界回填：忽略增量游标、按 max_pages 上限重拉（重配额操作，默认关闭）；
+    # false 走增量 github_incremental（since 游标 + pulls 早停）。
+    full_backfill: bool = False
 
 
 def _rid(request: Request) -> str:

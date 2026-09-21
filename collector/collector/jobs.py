@@ -44,18 +44,28 @@ def _client_for(settings) -> GitHubClient:
     )
 
 
-def _collect_scope(conn, collector: GitHubCollector, settings, repo_id: int | None) -> dict | None:
-    """采集给定 repo_id（None 表示全部追踪仓库），返回最后一次 collect_repo 结果。"""
+def _collect_scope(
+    conn,
+    collector: GitHubCollector,
+    settings,
+    repo_id: int | None,
+    *,
+    full_backfill: bool = False,
+) -> dict | None:
+    """采集给定 repo_id（None 表示全部追踪仓库），返回最后一次 collect_repo 结果。
+
+    `full_backfill` 透传给 `collect_repo`：True 时忽略增量游标做有界回填。
+    """
     if repo_id is not None:
         ref = db.repo_ref(conn, repo_id=repo_id)
         if ref is None:
             raise RuntimeError(f"repo not found: repo_id={repo_id}")
         owner, name = ref
-        return collector.collect_repo(owner, name)
+        return collector.collect_repo(owner, name, full_backfill=full_backfill)
     result: dict | None = None
     for repo in load_tracked_repos(settings.config_dir):
         owner, name = repo["repo"].split("/", 1)
-        result = collector.collect_repo(owner, name)
+        result = collector.collect_repo(owner, name, full_backfill=full_backfill)
     return result
 
 
@@ -64,11 +74,17 @@ def _drain_queued(conn, collector: GitHubCollector, settings) -> None:
 
     手动触发与定时兜底共用同一进程：queued 请求优先执行，随后照常跑全量兜底。
     """
-    for run_id, _job, repo_id in db.claim_queued_collect_runs(conn):
+    for run_id, job, repo_id in db.claim_queued_collect_runs(conn):
         db.mark_collect_run_running(conn, run_id=run_id)
         conn.commit()
         try:
-            result = _collect_scope(conn, collector, settings, repo_id)
+            result = _collect_scope(
+                conn,
+                collector,
+                settings,
+                repo_id,
+                full_backfill=(job == "github_backfill"),
+            )
             db.finish_collect_run(
                 conn,
                 run_id=run_id,

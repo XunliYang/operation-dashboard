@@ -94,7 +94,7 @@ def test_drain_queued_advances_run_to_success_and_collects(monkeypatch):
     calls: dict = {"collect": [], "running": [], "finished": []}
 
     class StubCollector:
-        def collect_repo(self, owner, name):
+        def collect_repo(self, owner, name, *, full_backfill=False):
             calls["collect"].append(f"{owner}/{name}")
             return {"rate_limit_remaining": 50}
 
@@ -118,7 +118,7 @@ def test_drain_queued_marks_failed_on_error(monkeypatch):
     calls: dict = {"finished": []}
 
     class BoomCollector:
-        def collect_repo(self, owner, name):
+        def collect_repo(self, owner, name, *, full_backfill=False):
             raise RuntimeError("boom")
 
     monkeypatch.setattr(db, "claim_queued_collect_runs", lambda conn: [(9, "github_backfill", None)])
@@ -141,7 +141,7 @@ def test_collect_scope_none_collects_all_tracked_repos(monkeypatch):
         def __init__(self):
             self.calls = []
 
-        def collect_repo(self, owner, name):
+        def collect_repo(self, owner, name, *, full_backfill=False):
             self.calls.append(f"{owner}/{name}")
             return {"rate_limit_remaining": 1}
 
@@ -149,6 +149,32 @@ def test_collect_scope_none_collects_all_tracked_repos(monkeypatch):
     result = _collect_scope(None, stub, _Settings(), None)
     assert stub.calls == ["a/b", "c/d"]
     assert result == {"rate_limit_remaining": 1}
+
+
+def test_drain_queued_distinguishes_backfill_from_incremental(monkeypatch):
+    """job 必须真正生效：github_backfill → full_backfill=True，反之 False。"""
+    import collector.db as db
+    from collector.jobs import _drain_queued
+
+    collected: list[tuple[str, str, bool]] = []
+
+    class StubCollector:
+        def collect_repo(self, owner, name, *, full_backfill=False):
+            collected.append((owner, name, full_backfill))
+            return {"rate_limit_remaining": 50}
+
+    monkeypatch.setattr(
+        db,
+        "claim_queued_collect_runs",
+        lambda conn: [(1, "github_backfill", None), (2, "github_incremental", None)],
+    )
+    monkeypatch.setattr(db, "mark_collect_run_running", lambda conn, run_id: None)
+    monkeypatch.setattr(db, "finish_collect_run", lambda conn, **k: None)
+    monkeypatch.setattr("collector.jobs.load_tracked_repos", lambda config_dir: [{"repo": "a/b"}])
+
+    _drain_queued(_FakeConn(), StubCollector(), _Settings())
+
+    assert collected == [("a", "b", True), ("a", "b", False)]
 
 
 def _record_finish(calls: dict):

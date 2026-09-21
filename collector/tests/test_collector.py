@@ -89,3 +89,72 @@ def test_fresh_pr_with_reviews_writes_count_and_first_review(monkeypatch):
 
     assert captured["review_count"] == 2
     assert captured["first_review_at"] == first  # 取最早的 submitted_at
+
+
+# --- LEOY-20：full_backfill 语义 —— 回填忽略游标，增量保留游标 ---
+
+
+class _RecordingClient:
+    """记录 paged 实际发出的 params / stop_after，供断言采集路径使用。"""
+
+    def __init__(self) -> None:
+        self.paged_calls: list[dict] = []
+        self.rate_limit = None
+
+    def get_json(self, url: str):
+        if url == "/repos/o/n":
+            return {
+                "id": 1,
+                "default_branch": "main",
+                "archived": False,
+                "stargazers_count": 0,
+                "forks_count": 0,
+                "subscribers_count": 0,
+                "open_issues_count": 0,
+            }
+        return {}
+
+    def paged(self, url, params=None, *, max_pages=40, items_key=None, stop_after=None):
+        self.paged_calls.append({"url": url, "params": params, "stop_after": stop_after})
+        return []
+
+
+def _collector_for_collect_repo(client, monkeypatch):
+    monkeypatch.setattr(cc.db, "upsert_repo", lambda conn, **k: 1)
+    monkeypatch.setattr(cc.db, "upsert_commit", lambda conn, **k: None)
+    monkeypatch.setattr(cc.db, "upsert_pull_request", lambda conn, **k: None)
+    monkeypatch.setattr(cc.db, "upsert_issue", lambda conn, **k: None)
+    monkeypatch.setattr(cc.db, "upsert_workflow_run", lambda conn, **k: None)
+    monkeypatch.setattr(cc.db, "upsert_repo_metric_daily", lambda conn, **k: None)
+    monkeypatch.setattr(cc.db, "parse_dt", lambda s: None)
+    cursor = datetime(2026, 1, 1, tzinfo=UTC)
+    monkeypatch.setattr(cc.db, "pulls_cursor", lambda conn, repo_id: cursor)
+    col = cc.GitHubCollector(client, object(), backfill_days=90)
+    monkeypatch.setattr(col, "_commits_cursor", lambda repo_id: cursor)
+    return col
+
+
+def test_collect_repo_full_backfill_ignores_cursors(monkeypatch):
+    client = _RecordingClient()
+    col = _collector_for_collect_repo(client, monkeypatch)
+
+    col.collect_repo("o", "n", full_backfill=True)
+
+    calls_by_url = {c["url"]: c for c in client.paged_calls}
+    commits = calls_by_url["/repos/o/n/commits"]
+    pulls = calls_by_url["/repos/o/n/pulls"]
+    assert "since" not in commits["params"]
+    assert pulls["stop_after"] is None
+
+
+def test_collect_repo_incremental_keeps_cursors(monkeypatch):
+    client = _RecordingClient()
+    col = _collector_for_collect_repo(client, monkeypatch)
+
+    col.collect_repo("o", "n", full_backfill=False)
+
+    calls_by_url = {c["url"]: c for c in client.paged_calls}
+    commits = calls_by_url["/repos/o/n/commits"]
+    pulls = calls_by_url["/repos/o/n/pulls"]
+    assert commits["params"]["since"] == datetime(2026, 1, 1, tzinfo=UTC).isoformat()
+    assert pulls["stop_after"] is not None

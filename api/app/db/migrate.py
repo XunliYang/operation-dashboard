@@ -10,8 +10,9 @@ import os
 from pathlib import Path
 
 from loguru import logger
+from psycopg import connect
 
-from app.db.pool import get_pool
+from app.core.config import get_settings
 
 MIGRATIONS_DIR = Path(
     os.environ.get(
@@ -20,16 +21,25 @@ MIGRATIONS_DIR = Path(
     )
 )
 
+# 单次连接建立的最大等待秒数。DB 未就绪时快速失败（而非无限阻塞），
+# 由 CLI 重试循环决定重试次数；CI 冒烟测试里没有 DB，迁移应在数秒内
+# 失败并让 uvicorn 正常启动。
+_CONNECT_TIMEOUT = 5
+
 
 def migrate() -> list[str]:
     """应用尚未执行的迁移，返回本次应用的文件名列表。
 
     首次调用会创建 `_schema_migrations` 记录表。任何一步失败会抛出异常，
     由调用方决定是否重试（各文件独立事务，已成功的不会重复执行）。
+
+    使用带 `connect_timeout` 的直连而非连接池：迁移是启动期一次性动作，
+    直连能在 DB 不可达时立即失败（`pool.connection()` 会无限阻塞等待可用连接）。
     """
-    pool = get_pool()
     applied_names: list[str] = []
-    with pool.connection() as conn:
+    with connect(
+        get_settings().database_url, connect_timeout=_CONNECT_TIMEOUT
+    ) as conn:
         conn.execute(
             "CREATE TABLE IF NOT EXISTS _schema_migrations ("
             " name TEXT PRIMARY KEY,"

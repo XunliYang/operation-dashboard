@@ -6,6 +6,7 @@ from collections.abc import Iterator
 
 from fastapi import HTTPException
 from psycopg import Connection, OperationalError
+from psycopg_pool import PoolTimeout
 
 from app.core.config import get_settings
 from app.db import get_connection
@@ -17,7 +18,7 @@ def db_conn() -> Iterator[Connection]:
     try:
         with get_connection() as conn:
             yield conn
-    except OperationalError as exc:  # pragma: no cover - 运行时才触发
+    except (OperationalError, PoolTimeout) as exc:  # pragma: no cover - 运行时才触发
         raise HTTPException(status_code=503, detail="database unavailable") from exc
 
 

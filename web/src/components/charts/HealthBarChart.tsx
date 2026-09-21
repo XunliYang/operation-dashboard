@@ -21,7 +21,7 @@ export interface HealthBarChartProps {
 /** 仓库健康分柱状图。Phase 0 用静态占位数据渲染，验证 Recharts 链路通。 */
 export function HealthBarChart({ data, height = 260 }: HealthBarChartProps) {
   return (
-    <div style={{ width: '100%', height }}>
+    <div className="min-w-0 overflow-hidden" style={{ width: '100%', height }}>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data} margin={{ top: 8, right: 8, bottom: 8, left: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />

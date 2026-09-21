@@ -41,6 +41,12 @@ class Settings(BaseSettings):
     # （否则历史哈希全部失效、无法按邮箱聚类身份）。
     email_hash_salt: str = "operation-dashboard-dev-salt"
 
+    # 舆情只读服务（sentiment-monitor）：BFF 代理其只读端点，前端不直连此地址。
+    sentiment_base_url: str = "http://sentiment-monitor:3000"
+    sentiment_timeout_seconds: float = 5.0
+    # 舆情服务若启用凭据（SENTIMENT_AUTH_TOKEN），BFF 携带该 token 调用。
+    sentiment_auth_token: str = ""
+
     @property
     def is_dev(self) -> bool:
         return self.env.lower() in {"dev", "local", "development"}

@@ -5,6 +5,13 @@
 #   severity         — 严重度 → 权重，用于加权聚合总情感分
 #   keyword_rules    — 关键词 → 极性，作为模型输出之外的兜底规则
 #   escalate         — 触发人工关注的阈值
+#   repo_project_map — 主站仓库 (owner/name) → 舆情项目 id（LEOY-7 · Phase 3 新增）
+
+# 主站仓库 -> 舆情项目 id 的显式映射（BFF 代理舆情只读端点时查这里取 id）。
+# 显式 id 而非名称：舆情 projects.name 是自由文本、无唯一性，禁止按名称模糊匹配。
+# sentiment_project_id 指向 sentiment-monitor DB 中 projects 表的整数主键。
+repo_project_map:
+  "XunliYang/operation-dashboard": 1
 
 polarity:
   positive:

@@ -87,3 +87,8 @@ CREATE INDEX IF NOT EXISTS idx_items_source ON items(source);
 CREATE INDEX IF NOT EXISTS idx_health_project_date ON source_health(project_id, date);
 CREATE INDEX IF NOT EXISTS idx_decisions_project ON decisions(project_id);
 CREATE INDEX IF NOT EXISTS idx_disabled_sources_project ON disabled_sources(project_id);
+
+-- LEOY-32：items 表的 (project_id, url) 唯一索引不放在本文件，而是在
+-- server/db/index.js 的 migrateItemsUniqueIndex() 中迁移创建。原因：历史库
+-- 可能已存在同 URL 重复条目，需先去重再建唯一索引，故不能在此直接 CREATE UNIQUE INDEX。
+-- 唯一索引为部分索引（WHERE url <> ''），空 URL 行不参与去重。

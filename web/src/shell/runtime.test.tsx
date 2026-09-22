@@ -1,8 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createElement } from 'react';
 import { MemoryRouter, RouterProvider, createMemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 
 import { translate } from '@/core/i18n';
 import { ShellApp } from '@/shell/ShellApp';
@@ -204,6 +204,49 @@ describe('shell runtime', () => {
       /导航项 to "dup" 冲突：插件 "a" 与 "b" 重复注册/,
     );
   });
+
+  it('i18n key 前缀不合规（契约违规）仍 fail-fast', () => {
+    const plugin: Plugin = {
+      id: 'repos',
+      order: 1,
+      titleKey: 'repos.title',
+      register(ctx) {
+        ctx.registerMessages({ zh: { 'bad.key': '不符前缀' } });
+      },
+    };
+    expect(() => assemble([plugin], makeQueryClient())).toThrow(/词条注册失败/);
+  });
+
+  it('插件 register 抛非契约异常：只跳过该插件，且不留半成品路由/导航/插槽', () => {
+    const bad: Plugin = {
+      id: 'bad',
+      order: 1,
+      titleKey: 'bad.title',
+      register(ctx) {
+        ctx.registerRoute({ path: 'bad', element: <div>BAD PAGE</div> });
+        ctx.registerNavItem({ to: '/bad', titleKey: 'bad.title' });
+        ctx.registerSlot('overview.card', 'bad-summary', <div>BAD SUMMARY</div>);
+        throw new Error('unexpected boom');
+      },
+    };
+    const good: Plugin = {
+      id: 'good',
+      order: 2,
+      titleKey: 'good.title',
+      register(ctx) {
+        ctx.registerRoute({ path: 'good', element: <div>GOOD PAGE</div> });
+        ctx.registerNavItem({ to: '/good', titleKey: 'good.title' });
+      },
+    };
+
+    const assembly = assemble([bad, good], makeQueryClient());
+
+    // 不抛；坏插件的 route / navItem / slot 一个不留，好插件照常装配
+    expect(assembly.routes.map((r) => r.path)).toEqual(['good']);
+    expect(assembly.navItems.map((n) => n.to)).toEqual(['/good']);
+    expect(assembly.slots['overview.card'] ?? []).toEqual([]);
+    expect(assembly.skippedPluginIds).toEqual(['bad']);
+  });
 });
 
 describe('shell slots（插槽消费）', () => {
@@ -303,5 +346,43 @@ describe('shell slots（插槽消费）', () => {
     };
     renderAssembly([plugin], '/actions');
     expect(screen.getByRole('button', { name: 'NOTIFY' })).toBeInTheDocument();
+  });
+
+  it('插槽卡 render 抛错时错误卡片与 console.error 显示真实插件 id（非插槽 key）', () => {
+    function BoomCard(): never {
+      throw new Error('slot boom');
+    }
+    const overview: Plugin = {
+      id: 'overview',
+      order: 10,
+      titleKey: 'overview.title',
+      register(ctx) {
+        ctx.registerRoute({ path: 'overview', element: <div>OVERVIEW PAGE</div> });
+      },
+    };
+    const people: Plugin = {
+      id: 'people',
+      order: 30,
+      titleKey: 'people.title',
+      register(ctx) {
+        ctx.registerRoute({ path: 'people', element: <div>PEOPLE PAGE</div> });
+        ctx.registerSlot('overview.card', 'people-summary', createElement(BoomCard));
+      },
+    };
+
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    renderAssembly([overview, people], '/overview');
+
+    expect(screen.getByText('OVERVIEW PAGE')).toBeInTheDocument();
+    const alert = screen.getByRole('alert');
+    expect(within(alert).getByText('people')).toBeInTheDocument();
+    expect(within(alert).queryByText('people-summary')).not.toBeInTheDocument();
+
+    const logged = errorSpy.mock.calls.map((call) => String(call[0]));
+    expect(logged.some((line) => line.includes('插件 "people" 抛错'))).toBe(true);
+    expect(logged.some((line) => line.includes('people-summary'))).toBe(false);
+
+    errorSpy.mockRestore();
   });
 });

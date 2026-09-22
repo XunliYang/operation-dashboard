@@ -328,6 +328,7 @@ function Dashboard() {
           rowKey="id"
           pagination={false}
           size="small"
+          scroll={{ x: 'max-content' }}
           locale={{ emptyText: '暂无采集记录' }}
         />
       </Card>

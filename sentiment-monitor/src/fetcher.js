@@ -529,6 +529,7 @@ async function fetchGitHub(query, type = 'repositories') {
         }
       }
       return {
+        source: jsonType,
         source_method: 'agent_reach',
         source_detail: 'github',
         platform: 'github',

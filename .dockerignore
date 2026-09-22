@@ -1,0 +1,20 @@
+# 仅被 collector 构建使用（其 build.context 为 monorepo 根）。
+# 其余服务（api/web/sentiment-monitor）各自以子目录为上下文，不受此文件影响。
+.git
+.venv
+**/__pycache__
+**/*.py[cod]
+**/*.egg-info
+**/.pytest_cache
+**/.ruff_cache
+**/.mypy_cache
+.env
+.env.*
+!.env.example
+web
+sentiment-monitor
+deploy
+api/tests
+collector/tests
+api/.env.example
+collector/.dockerignore

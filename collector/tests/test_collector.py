@@ -129,6 +129,14 @@ def _collector_for_collect_repo(client, monkeypatch):
     monkeypatch.setattr(cc.db, "parse_dt", lambda s: None)
     cursor = datetime(2026, 1, 1, tzinfo=UTC)
     monkeypatch.setattr(cc.db, "pulls_cursor", lambda conn, repo_id: cursor)
+    # 收尾步骤（代码量 / wiki）不参与游标测试：桩掉避免真实网络与 subprocess。
+    monkeypatch.setattr(
+        "collector.code_stats.collect_code_stats",
+        lambda client, conn, *, repo_id, owner, name: 0,
+    )
+    monkeypatch.setattr(
+        "collector.wiki.collect_wiki", lambda conn, *, repo_id, owner, name, salt: 0
+    )
     col = cc.GitHubCollector(client, object(), backfill_days=90)
     monkeypatch.setattr(col, "_commits_cursor", lambda repo_id: cursor)
     return col
@@ -158,3 +166,61 @@ def test_collect_repo_incremental_keeps_cursors(monkeypatch):
     pulls = calls_by_url["/repos/o/n/pulls"]
     assert commits["params"]["since"] == datetime(2026, 1, 1, tzinfo=UTC).isoformat()
     assert pulls["stop_after"] is not None
+
+
+# --- LEOY-47：commit 邮箱 → 哈希/脱敏落库 + review 配额取舍 ---
+
+
+def test_ingest_commit_persists_hashed_email(monkeypatch):
+    from app.services.org_classifier import hash_email
+
+    captured: dict = {}
+    monkeypatch.setattr(cc.db, "upsert_commit", lambda conn, **k: None)
+    monkeypatch.setattr(cc.db, "upsert_contributor", lambda conn, **k: captured.update(k) or 1)
+    monkeypatch.setattr(cc.db, "parse_dt", lambda s: None)
+
+    col = cc.GitHubCollector(object(), object(), backfill_days=90, email_hash_salt="salt")
+    col._ingest_commit(1, {
+        "sha": "abc",
+        "commit": {
+            "author": {"name": "Alice", "email": "Alice@Huawei.com", "date": "2026-01-01T00:00:00Z"},
+            "committer": {},
+        },
+        "author": {"login": "alice", "id": 1},
+        "parents": [],
+    })
+
+    assert captured["email_masked"] == "a***@huawei.com"
+    assert captured["email_domain"] == "huawei.com"
+    assert captured["email_hash"] == hash_email("Alice@Huawei.com", "salt")
+    # 明文邮箱不落库（哈希不包含明文）
+    assert "Alice@Huawei.com" not in captured["email_hash"]
+
+
+def test_review_floor_skips_reviews_before_cursor(monkeypatch):
+    client = _FakeClient([])
+    col, captured = _collector(client, monkeypatch)
+    floor = datetime.now(UTC) - timedelta(days=3)
+    col._ingest_pull_request(1, "o", "n", {
+        "number": 42,
+        "created_at": _iso(datetime.now(UTC) - timedelta(days=10)),
+        "updated_at": _iso(datetime.now(UTC) - timedelta(days=5)),  # 早于 review_floor
+        "user": {"login": "a", "id": 2},
+    }, review_floor=floor)
+    assert client.review_calls == 0
+    assert captured["review_count"] is None
+    assert captured["first_review_at"] is None
+
+
+def test_review_floor_fetches_reviews_after_cursor(monkeypatch):
+    client = _FakeClient([])
+    col, captured = _collector(client, monkeypatch)
+    floor = datetime.now(UTC) - timedelta(days=3)
+    col._ingest_pull_request(1, "o", "n", {
+        "number": 42,
+        "created_at": _iso(datetime.now(UTC) - timedelta(days=10)),
+        "updated_at": _iso(datetime.now(UTC)),  # 晚于 review_floor
+        "user": {"login": "a", "id": 2},
+    }, review_floor=floor)
+    assert client.review_calls == 1
+    assert captured["review_count"] == 0

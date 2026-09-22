@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 import collector.db as db
 
@@ -22,6 +22,12 @@ class _RecordingConn:
         self.sql = sql
         self.params = params
         return self
+
+    def fetchone(self):
+        return (1,)
+
+    def fetchall(self):
+        return []
 
 
 def test_upsert_pr_preserves_review_fields_via_coalesce():
@@ -72,3 +78,77 @@ def test_upsert_pr_inserts_updated_at_column():
     assert conn.sql is not None and "updated_at" in conn.sql
     # 拉取后 review_count 写为真实值（含 0），而不是 None
     assert conn.params is not None and conn.params[10] == 0
+
+
+# --- LEOY-47：邮箱落库 / 代码量 / wiki / 公平调度 ---
+
+
+def test_upsert_contributor_persists_hashed_email_fields():
+    conn = _RecordingConn()
+    db.upsert_contributor(
+        conn,
+        gh_login="alice",
+        gh_id=1,
+        display_name="Alice",
+        seen_at=_TS,
+        email_hash="deadbeef",
+        email_masked="a***@huawei.com",
+        email_domain="huawei.com",
+    )
+    assert conn.sql is not None and "email_hash" in conn.sql and "email_masked" in conn.sql
+    assert "email_domain" in conn.sql
+    # 明文邮箱绝不落库：params 里是脱敏形，不含明文
+    joined = " ".join(str(p) for p in (conn.params or ()))
+    assert "a***@huawei.com" in joined
+    assert "huawei.com" in joined
+
+
+def test_upsert_contributor_coalesces_email_on_update():
+    # 后续采集若不传邮箱，已有的 email_* 值用 COALESCE 保留旧值，不被 NULL 覆盖。
+    conn = _RecordingConn()
+    db.upsert_contributor(conn, gh_login="alice", gh_id=1, display_name="a", seen_at=_TS)
+    assert "email_hash = COALESCE(EXCLUDED.email_hash, dim_contributor.email_hash)" in conn.sql
+
+
+def test_upsert_code_weekly_overwrites_on_conflict():
+    conn = _RecordingConn()
+    db.upsert_code_weekly(
+        conn,
+        repo_id=1,
+        author_id=5,
+        gh_login="alice",
+        week_start=date(2026, 1, 1),
+        commits=3,
+        additions=10,
+        deletions=2,
+    )
+    # 周桶会随 GitHub 重算而变化：必须 DO UPDATE 可覆盖。
+    assert "ON CONFLICT (repo_id, week_start, gh_login) DO UPDATE" in conn.sql
+
+
+def test_upsert_wiki_revision_is_append_only():
+    conn = _RecordingConn()
+    db.upsert_wiki_revision(
+        conn,
+        repo_id=1,
+        page_slug="Home",
+        revision_sha="abc",
+        author_id=None,
+        author_email_hash="h",
+        committed_at=_TS,
+        message="rev",
+    )
+    # append-only，与 fact_commit 同法（DO NOTHING）。
+    assert "ON CONFLICT DO NOTHING" in conn.sql
+
+
+def test_last_success_by_repo_maps_full_name_to_ts():
+    class _Conn:
+        def execute(self, sql, params=None):
+            return self
+
+        def fetchall(self):
+            return [("o", "n1", _TS), ("o", "n2", None)]
+
+    result = db.last_success_by_repo(_Conn())
+    assert result == {"o/n1": _TS, "o/n2": None}

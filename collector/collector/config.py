@@ -27,6 +27,11 @@ class CollectorSettings(BaseSettings):
     # 采集窗口：首次回填与增量游标回退天数
     backfill_days: int = 90
 
+    # 邮箱哈希盐：dim_contributor.email_hash = sha256(salt + lower(email))。
+    # 必须与 api 侧 api/app/core/config.py 的 email_hash_salt 保持一致，
+    # 否则同一邮箱在两边的哈希不一致、无法按 email_hash 聚类身份。
+    email_hash_salt: str = "operation-dashboard-dev-salt"
+
     # Webhook
     webhook_secret: str = ""
     webhook_dedup_ttl_seconds: int = 3600

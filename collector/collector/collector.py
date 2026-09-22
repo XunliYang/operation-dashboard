@@ -14,7 +14,8 @@ from loguru import logger
 from psycopg import Connection
 
 import collector.db as db
-from collector.github.client import GitHubClient
+from app.services.org_classifier import email_domain, hash_email, mask_email
+from collector.github.client import GitHubClient, RateLimitExceeded
 
 # GraphQL 仓库快照查询（Phase 1 主路径仍走 REST；GraphQL 批量拉取为后续优化）
 REPO_OVERVIEW_QUERY = """
@@ -42,11 +43,17 @@ def _user(obj: dict | None) -> tuple[str | None, int | None]:
 
 class GitHubCollector:
     def __init__(
-        self, client: GitHubClient, conn: Connection, *, backfill_days: int = 90
+        self,
+        client: GitHubClient,
+        conn: Connection,
+        *,
+        backfill_days: int = 90,
+        email_hash_salt: str = "operation-dashboard-dev-salt",
     ) -> None:
         self.client = client
         self.conn = conn
         self.backfill_days = backfill_days
+        self.email_hash_salt = email_hash_salt
         self._review_cutoff = _utcnow() - timedelta(days=backfill_days)
 
     # ---- 各资源摄入 ----
@@ -62,12 +69,18 @@ class GitHubCollector:
             or _utcnow()
         )
         login, gh_id = _user(c.get("author"))
+        # 明文邮箱只在采集/分类的瞬态内存中出现，落库前转哈希/脱敏（隐私红线，
+        # 见 api/migrations/0003_org_people.sql 的约定）；email_domain 非 PII 可明文存。
+        email = author.get("email")
         author_id = db.upsert_contributor(
             self.conn,
             gh_login=login,
             gh_id=gh_id,
             display_name=author.get("name") or login,
             seen_at=committed_at,
+            email_hash=hash_email(email, self.email_hash_salt) if email else None,
+            email_masked=mask_email(email) if email else None,
+            email_domain=email_domain(email) if email else None,
         )
         is_merge = len(c.get("parents") or []) > 1
         db.upsert_commit(
@@ -83,7 +96,9 @@ class GitHubCollector:
             is_merge=is_merge,
         )
 
-    def _ingest_pull_request(self, repo_id: int, owner: str, name: str, pr: dict) -> None:
+    def _ingest_pull_request(
+        self, repo_id: int, owner: str, name: str, pr: dict, *, review_floor: datetime | None = None
+    ) -> None:
         number = pr["number"]
         created_at = db.parse_dt(pr.get("created_at")) or _utcnow()
         updated_at = db.parse_dt(pr.get("updated_at"))
@@ -96,7 +111,11 @@ class GitHubCollector:
         # 0..N = 已拉取且条数为 N（含真实的 0）。不能用 0 当「未拉取」哨兵。
         review_count: int | None = None
         first_review_at: datetime | None = None
-        if updated_at is None or updated_at >= self._review_cutoff:
+        # 配额取舍：review 只对「本轮新出现/更新」的 PR 拉取。增量轮次用 pulls 游标
+        # 做下限（review_floor）；首轮回填游标为 None，退回 90 天窗口（有界，避免全量
+        # 历史 PR 的逐条 reviews 请求打死配额）。
+        floor = review_floor if review_floor is not None else self._review_cutoff
+        if updated_at is None or updated_at >= floor:
             reviews = self.client.get_json(f"/repos/{owner}/{name}/pulls/{number}/reviews")
             review_count = len(reviews)
             for r in reviews:
@@ -237,7 +256,7 @@ class GitHubCollector:
         for p in pulls:
             if p.get("state") == "open":
                 open_prs += 1
-            self._ingest_pull_request(repo_id, owner, name, p)
+            self._ingest_pull_request(repo_id, owner, name, p, review_floor=pulls_cursor)
         logger.info("repo {}/{}: {} pulls", owner, name, len(pulls))
 
         issues = self.client.paged(
@@ -265,6 +284,30 @@ class GitHubCollector:
             open_prs=open_prs,
         )
 
+        # 收尾：代码量周桶 + wiki 修订。二者失败不影响仓库主体采集（各自兜底），
+        # 但配额耗尽（RateLimitExceeded）仍向上抛，交给 collect_repos 中断本轮。
+        code_weeks = 0
+        try:
+            from collector import code_stats
+
+            code_weeks = code_stats.collect_code_stats(
+                self.client, self.conn, repo_id=repo_id, owner=owner, name=name
+            )
+        except RateLimitExceeded:
+            raise
+        except Exception as exc:  # noqa: BLE001 — 代码量失败不拖垮仓库主体采集
+            logger.warning("code stats failed for {}/{}: {}", owner, name, exc)
+
+        wiki_revisions = 0
+        try:
+            from collector import wiki
+
+            wiki_revisions = wiki.collect_wiki(
+                self.conn, repo_id=repo_id, owner=owner, name=name, salt=self.email_hash_salt
+            )
+        except Exception as exc:  # noqa: BLE001 — wiki 失败不拖垮仓库主体采集
+            logger.warning("wiki collect failed for {}/{}: {}", owner, name, exc)
+
         remaining = self.client.rate_limit.remaining if self.client.rate_limit else None
         return {
             "repo_id": repo_id,
@@ -273,4 +316,6 @@ class GitHubCollector:
             "pulls": len(pulls),
             "issues": len(issues),
             "runs": len(runs),
+            "code_weeks": code_weeks,
+            "wiki_revisions": wiki_revisions,
         }

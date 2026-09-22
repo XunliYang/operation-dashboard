@@ -39,5 +39,35 @@ orgs:
       - XunliYang/operation-dashboard
       - XunliYang/sentiment-monitor
 
+  # ---- 邮箱域名推断的外部组织（email_domain 来源，confidence ≈0.6）----
+  # 实测 OpenAN 全部提交邮箱的域名集合与归属见 LEOY-47 需求表。
+  huawei:
+    display: 华为
+    email_domains:
+      - huawei.com
+  huawei-partner:
+    display: 华为伙伴
+    email_domains:
+      - h-partners.com
+  zte:
+    display: 中兴
+    email_domains:
+      - zte.com.cn
+  gdcattsoft:
+    display: 广通软件
+    email_domains:
+      - gdcattsoft.com
+  external:
+    display: 外部/个人
+    # github.com 覆盖 noreply@github.com 这类 GitHub 占位邮箱；users.noreply.github.com
+    # 是另一 GitHub 占位域。二者都必须是 external，不得据此误判成某个公司。
+    email_domains:
+      - gmail.com
+      - outlook.com
+      - 163.com
+      - qq.com
+      - users.noreply.github.com
+      - github.com
+
 # 未匹配到任何组织的仓库归入此组织
 default_org: openan

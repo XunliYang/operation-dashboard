@@ -32,8 +32,19 @@ function useIsMobile() {
     const mql = window.matchMedia(MOBILE_MEDIA_QUERY);
     const onChange = (event) => setIsMobile(event.matches);
     setIsMobile(mql.matches);
-    mql.addEventListener('change', onChange);
-    return () => mql.removeEventListener('change', onChange);
+    // 现代浏览器用 addEventListener；旧版 Safari/WebView 回退到 addListener。
+    if (typeof mql.addEventListener === 'function') {
+      mql.addEventListener('change', onChange);
+    } else if (typeof mql.addListener === 'function') {
+      mql.addListener(onChange);
+    }
+    return () => {
+      if (typeof mql.removeEventListener === 'function') {
+        mql.removeEventListener('change', onChange);
+      } else if (typeof mql.removeListener === 'function') {
+        mql.removeListener(onChange);
+      }
+    };
   }, []);
 
   return isMobile;

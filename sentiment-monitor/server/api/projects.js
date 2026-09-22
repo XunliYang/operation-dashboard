@@ -6,17 +6,64 @@ const scheduler = require('../scheduler');
 
 const router = express.Router();
 
+/** 敏感键名（小写）—— 命中即从返回的 config 中删除。 */
+const SENSITIVE_KEYS = new Set([
+  'pass',
+  'password',
+  'passwd',
+  'secret',
+  'apikey',
+  'api_key',
+  'token',
+  'accesskey',
+  'access_key',
+]);
+
+/**
+ * 剥离项目 config 中的敏感字段（P0-1）。
+ * 口径与 `GET /api/config/email` 的打码行为对齐：`email.smtp` 整块删除，
+ * 任何 `pass` / `password` / `token` 等敏感键递归删除。返回新对象，不改原值。
+ */
+function sanitizeConfig(config) {
+  if (!config || typeof config !== 'object') return config;
+  const out = Array.isArray(config) ? [...config] : { ...config };
+
+  function walk(node) {
+    if (!node || typeof node !== 'object') return;
+    for (const [key, value] of Object.entries(node)) {
+      if (SENSITIVE_KEYS.has(key.toLowerCase())) {
+        delete node[key];
+      } else if (value && typeof value === 'object') {
+        walk(value);
+      }
+    }
+  }
+
+  if (out.email && typeof out.email === 'object') {
+    delete out.email.smtp;
+  }
+  walk(out);
+  return out;
+}
+
+/** 把 projects 表行转成对外视图：config 脱敏后解析。 */
+function toProjectView(row) {
+  const config = (() => {
+    try {
+      return JSON.parse(row.config);
+    } catch (_) {
+      return {};
+    }
+  })();
+  return { ...row, config: sanitizeConfig(config) };
+}
+
 // GET /api/projects - 项目列表
 router.get('/', (req, res) => {
   const db = getDb();
   const projects = db.prepare('SELECT * FROM projects ORDER BY created_at DESC').all();
 
-  const result = projects.map(p => ({
-    ...p,
-    config: JSON.parse(p.config),
-  }));
-
-  res.json(result);
+  res.json(projects.map(toProjectView));
 });
 
 // GET /api/projects/:id - 项目详情
@@ -28,10 +75,7 @@ router.get('/:id', (req, res) => {
     return res.status(404).json({ error: { message: '项目不存在', code: 'NOT_FOUND' } });
   }
 
-  res.json({
-    ...project,
-    config: JSON.parse(project.config),
-  });
+  res.json(toProjectView(project));
 });
 
 // POST /api/projects - 创建项目
@@ -56,10 +100,7 @@ router.post('/', (req, res) => {
     // 重启调度器
     scheduler.restart();
 
-    res.status(201).json({
-      ...project,
-      config: JSON.parse(project.config),
-    });
+    res.status(201).json(toProjectView(project));
   } catch (err) {
     if (err.message.includes('UNIQUE constraint failed')) {
       return res.status(409).json({ error: { message: '项目名称已存在', code: 'CONFLICT' } });
@@ -112,10 +153,7 @@ router.put('/:id', (req, res) => {
 
   logger.info('更新项目', { projectId: req.params.id, updates: req.body });
 
-  res.json({
-    ...updated,
-    config: JSON.parse(updated.config),
-  });
+  res.json(toProjectView(updated));
 });
 
 // DELETE /api/projects/:id - 删除项目

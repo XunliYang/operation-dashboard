@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS source_health (
   project_id INTEGER NOT NULL,
   source TEXT NOT NULL,
   link TEXT,
+  source_type TEXT,
   date TEXT NOT NULL,
   raw_count INTEGER DEFAULT 0,
   filtered_count INTEGER DEFAULT 0,

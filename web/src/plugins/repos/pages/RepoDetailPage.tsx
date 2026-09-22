@@ -63,7 +63,7 @@ export function RepoDetailPage() {
   return (
     <div>
       <PageHeader
-        title={repoId || t('repos.title')}
+        title={detail.data ? detail.data.name : t('common.loading')}
         description={detail.data ? detail.data.full_name : t('common.loading')}
         actions={
           detail.data ? (

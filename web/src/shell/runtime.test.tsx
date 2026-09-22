@@ -205,3 +205,103 @@ describe('shell runtime', () => {
     );
   });
 });
+
+describe('shell slots（插槽消费）', () => {
+  it('overview.card 有注册 → 渲染在 /overview 页面', () => {
+    const overview: Plugin = {
+      id: 'overview',
+      order: 10,
+      titleKey: 'overview.title',
+      register(ctx) {
+        ctx.registerNavItem({ to: '/overview', titleKey: 'overview.title' });
+        ctx.registerRoute({ path: 'overview', element: <div>OVERVIEW PAGE</div> });
+        ctx.registerSlot('overview.card', 'summary', <div>SUMMARY CARD</div>);
+      },
+    };
+    renderAssembly([overview], '/overview');
+    expect(screen.getByText('OVERVIEW PAGE')).toBeInTheDocument();
+    expect(screen.getByText('SUMMARY CARD')).toBeInTheDocument();
+  });
+
+  it('overview.card 无注册 → /overview 正常渲染不崩（不产生插槽占位）', () => {
+    const overview: Plugin = {
+      id: 'overview',
+      order: 10,
+      titleKey: 'overview.title',
+      register(ctx) {
+        ctx.registerNavItem({ to: '/overview', titleKey: 'overview.title' });
+        ctx.registerRoute({ path: 'overview', element: <div>OVERVIEW PAGE</div> });
+      },
+    };
+    renderAssembly([overview], '/overview');
+    expect(screen.getByText('OVERVIEW PAGE')).toBeInTheDocument();
+  });
+
+  it('overview.card 只渲染在 overview 路由，不泄漏到其他页面', () => {
+    const overview: Plugin = {
+      id: 'overview',
+      order: 10,
+      titleKey: 'overview.title',
+      register(ctx) {
+        ctx.registerRoute({ path: 'overview', element: <div>OVERVIEW PAGE</div> });
+        ctx.registerSlot('overview.card', 'summary', <div>SUMMARY CARD</div>);
+      },
+    };
+    const people: Plugin = {
+      id: 'people',
+      order: 30,
+      titleKey: 'people.title',
+      register(ctx) {
+        ctx.registerRoute({ path: 'people', element: <div>PEOPLE PAGE</div> });
+      },
+    };
+    renderAssembly([overview, people], '/people');
+    expect(screen.getByText('PEOPLE PAGE')).toBeInTheDocument();
+    expect(screen.queryByText('SUMMARY CARD')).not.toBeInTheDocument();
+  });
+
+  it('注册 overview.card 的插件被移除后，/overview 仍渲染、仅少一张卡', () => {
+    const overview: Plugin = {
+      id: 'overview',
+      order: 10,
+      titleKey: 'overview.title',
+      register(ctx) {
+        ctx.registerNavItem({ to: '/overview', titleKey: 'overview.title' });
+        ctx.registerRoute({ path: 'overview', element: <div>OVERVIEW PAGE</div> });
+      },
+    };
+    const people: Plugin = {
+      id: 'people',
+      order: 30,
+      titleKey: 'people.title',
+      register(ctx) {
+        ctx.registerRoute({ path: 'people', element: <div>PEOPLE PAGE</div> });
+        ctx.registerSlot('overview.card', 'people-summary', <div>PEOPLE SUMMARY</div>);
+      },
+    };
+
+    const first = renderAssembly([overview, people], '/overview');
+    expect(screen.getByText('PEOPLE SUMMARY')).toBeInTheDocument();
+    first.unmount();
+
+    // 移除 people 插件：页面照常、仅少卡
+    renderAssembly([overview], '/overview');
+    expect(screen.getByText('OVERVIEW PAGE')).toBeInTheDocument();
+    expect(screen.queryByText('PEOPLE SUMMARY')).not.toBeInTheDocument();
+  });
+
+  it('header.action 插槽渲染在顶栏动作区（既有消费方不回归）', () => {
+    const plugin: Plugin = {
+      id: 'actions',
+      order: 1,
+      titleKey: 'actions.title',
+      register(ctx) {
+        ctx.registerNavItem({ to: '/actions', titleKey: 'actions.title' });
+        ctx.registerRoute({ path: 'actions', element: <div>ACTIONS PAGE</div> });
+        ctx.registerSlot('header.action', 'notify', <button type="button">NOTIFY</button>);
+      },
+    };
+    renderAssembly([plugin], '/actions');
+    expect(screen.getByRole('button', { name: 'NOTIFY' })).toBeInTheDocument();
+  });
+});

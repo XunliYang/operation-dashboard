@@ -7,7 +7,7 @@
  *   - 导航项 to/titleKey 非空、to 不重复（与 registerRoute 同等严格）
  *   - i18n key 前缀合规（由 core/i18n 的 registerMessages 校验，这里补充插件上下文）
  */
-import { createElement } from 'react';
+import { createElement, Fragment } from 'react';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import type { RouteObject } from 'react-router-dom';
 import type { QueryClient } from '@tanstack/react-query';
@@ -27,6 +27,7 @@ import type {
 import { NotFoundPage } from './NotFoundPage';
 import { PluginBoundary } from './PluginBoundary';
 import { ShellApp } from './ShellApp';
+import { SlotOutlet } from './SlotOutlet';
 import { plugins } from './registry';
 
 export interface ShellAssembly {
@@ -196,10 +197,45 @@ export function buildShellRoutes(assembly: ShellAssembly): RouteObject[] {
     homePath
       ? { index: true, element: createElement(Navigate, { to: homePath, replace: true }) }
       : { index: true, element: createElement(NotFoundPage) },
-    ...assembly.routes,
+    ...injectPageSlots(assembly.routes, assembly.slots),
     { path: '*', element: createElement(NotFoundPage, { homePath }) },
   ];
   return children;
+}
+
+/**
+ * 页面级插槽宿主约定：`<page>.card` 插槽（如 `overview.card`）渲染在 `<page>` 路由页面上。
+ * 页面名从槽名派生（`overview.card` → `overview`），内核不引用任何插件 id/path，
+ * 沿用 `resolveHomePath` 已确立的「从装配结果派生、不硬编码」原则。
+ *
+ * 若同名路由不存在（页面插件被删）或该插槽无任何注册，注入函数原样返回路由数组，
+ * 页面照常渲染、仅少卡片——插槽消费不依赖任何具体插件的存在。
+ */
+function injectPageSlots(
+  routes: RouteObject[],
+  slots: ShellAssembly['slots'],
+): RouteObject[] {
+  const overview = slots['overview.card'] ?? [];
+  if (overview.length === 0) return routes;
+
+  const hostPath = pagePathForSlot('overview.card');
+  return routes.map((route) => {
+    if (normalizePath(route.path ?? '') !== hostPath) return route;
+    return {
+      ...route,
+      element: createElement(
+        Fragment,
+        null,
+        route.element,
+        createElement(SlotOutlet, { slots: overview, className: 'mt-6' }),
+      ),
+    };
+  });
+}
+
+/** 从页面级槽名派生宿主路由路径：`overview.card` → `overview`。 */
+function pagePathForSlot(slot: 'overview.card'): string {
+  return slot.replace(/\.card$/, '');
 }
 
 /** 构建浏览器路由。默认用静态装配出的真实插件清单；测试可注入任意 pluginList。 */

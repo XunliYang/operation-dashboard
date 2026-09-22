@@ -214,7 +214,7 @@ async function collect(project, triggerType = 'scheduled') {
             insertItem.run(
               project.id,
               historyId,
-              item.source || 'unknown',
+              item.source || item.platform || 'unknown',
               item.title || '',
               item.url || '',
               item.snippet || '',

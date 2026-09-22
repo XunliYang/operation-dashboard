@@ -219,11 +219,19 @@ def repo_contributors(
     start_dt = datetime(start.year, start.month, start.day, tzinfo=UTC)
 
     commits = conn.execute(
-        "SELECT c.contributor_id, c.gh_login, COUNT(*)::int AS commits,"
+        "SELECT c.contributor_id, c.gh_login, c.display_name, c.email_plain, c.email_masked,"
+        " COALESCE(o.key, '_unclassified') AS org_key, COALESCE(o.name, '待归类') AS org_name,"
+        " COALESCE(b.source, 'inferred') AS org_source,"
+        " COALESCE(b.confidence, 0) AS org_confidence,"
+        " COUNT(*)::int AS commits,"
         " MIN(fc.committed_at) AS first_seen, MAX(fc.committed_at) AS last_seen"
         " FROM fact_commit fc JOIN dim_contributor c ON c.contributor_id = fc.author_id"
+        " LEFT JOIN bridge_contributor_org b"
+        "   ON b.contributor_id = c.contributor_id AND b.valid_to IS NULL"
+        " LEFT JOIN dim_org o ON o.org_id = b.org_id"
         " WHERE fc.repo_id=%s AND fc.committed_at > %s AND fc.committed_at <= %s"
-        " GROUP BY c.contributor_id, c.gh_login",
+        " GROUP BY c.contributor_id, c.gh_login, c.display_name, c.email_plain, c.email_masked,"
+        "          o.key, o.name, b.source, b.confidence",
         (rid, start_dt, end_dt),
     ).fetchall()
     prs = dict(
@@ -242,18 +250,63 @@ def repo_contributors(
             (rid, start_dt, end_dt),
         ).fetchall()
     )
+    issues = dict(
+        conn.execute(
+            "SELECT author_id, COUNT(*)::int FROM fact_issue"
+            " WHERE repo_id=%s AND is_pull_request=false"
+            " AND created_at > %s AND created_at <= %s"
+            " GROUP BY author_id",
+            (rid, start_dt, end_dt),
+        ).fetchall()
+    )
+    wiki = dict(
+        conn.execute(
+            "SELECT author_id, COUNT(*)::int FROM fact_wiki_revision"
+            " WHERE repo_id=%s AND committed_at > %s AND committed_at <= %s"
+            " GROUP BY author_id",
+            (rid, start_dt, end_dt),
+        ).fetchall()
+    )
+    code_add: dict[int, int] = {}
+    code_del: dict[int, int] = {}
+    for r in conn.execute(
+        "SELECT author_id, SUM(additions)::int, SUM(deletions)::int"
+        " FROM fact_contributor_code_weekly"
+        " WHERE repo_id=%s AND week_start >= %s AND week_start <= %s GROUP BY author_id",
+        (rid, start, end),
+    ).fetchall():
+        code_add[int(r[0])] = int(r[1])
+        code_del[int(r[0])] = int(r[2])
 
     data = []
     for row in commits:
-        cid = row[0]
+        cid = int(row[0])
+        additions = int(code_add.get(cid, 0))
+        deletions = int(code_del.get(cid, 0))
         data.append(
             {
                 "login": row[1],
-                "commits": row[2],
+                "contributor_id": str(cid),
+                "avatar_url": f"https://github.com/{row[1]}.png" if row[1] else None,
+                # email 取明文 email_plain（需求方 2026-09-22 拍板），脱敏形另立 email_masked。
+                "email": row[3] if row[3] else None,
+                "email_masked": row[4],
+                "org": {
+                    "key": row[5],
+                    "display": row[6],
+                    "source": row[7],
+                    "confidence": float(row[8]) if row[8] is not None else None,
+                },
+                "commits": row[9],
                 "prs": int(prs.get(cid, 0)),
                 "reviews": int(reviews.get(cid, 0)),
-                "first_seen": row[3].isoformat() if row[3] else None,
-                "last_seen": row[4].isoformat() if row[4] else None,
+                "issues": int(issues.get(cid, 0)),
+                "wiki": int(wiki.get(cid, 0)),
+                "code_additions": additions,
+                "code_deletions": deletions,
+                "code_total": additions + deletions,
+                "first_seen": row[10].isoformat() if row[10] else None,
+                "last_seen": row[11].isoformat() if row[11] else None,
             }
         )
     return api_json(data, code=CODE_OK, message="ok", request_id=_rid(request))

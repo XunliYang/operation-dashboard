@@ -18,6 +18,7 @@ from app.middleware.request_id import RequestIdMiddleware
 from app.middleware.size_limit import SizeLimitMiddleware
 from app.middleware.timeout import TimeoutMiddleware
 from app.routers.admin import router as admin_router
+from app.routers.contributions import router as contributions_router
 from app.routers.people import admin_router as people_admin_router
 from app.routers.people import router as people_router
 from app.routers.repos import router as repos_router
@@ -71,6 +72,7 @@ def create_app() -> FastAPI:
     app.include_router(people_admin_router)
     app.include_router(sentiment_router)
     app.include_router(workbench_router)
+    app.include_router(contributions_router)
     return app
 
 

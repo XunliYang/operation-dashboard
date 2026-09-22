@@ -1,0 +1,20 @@
+# 工作台预警阈值（LEOY-12 · Phase 1.7）
+#
+# 所有口径阈值集中在此，响应中会回显生效值（`thresholds` 字段），
+# 改这里即可复现「这个数字怎么算出来的」。query 参数 `window` 可覆盖窗口，
+# 其余阈值仅由本文件控制，不散落魔法数。
+#
+# 字段说明：
+#   window_days         — 默认滚动窗口（天）；`?window=7d` 覆盖，也用于「停滞仓库」判定
+#   review_backlog_days — review 积压：PR 打开且尚未收到首评、创建距今超过 N 天
+#   slow_response_hours — issue 首响慢：按仓库取 issue 关闭时长中位数，超过 N 小时计 1 个
+#   health_drop_top_n   — 健康度下滑：近窗口综合分跌幅最大的前 N 个仓库
+#   health_drop_dimension — 健康度下滑取 agg_health_score_daily 的哪个维度（composite=综合分）
+#   list_limit          — 各清单卡（停滞/下滑/最近发布）最多返回的条目数
+
+window_days: 7
+review_backlog_days: 3
+slow_response_hours: 48
+health_drop_top_n: 3
+health_drop_dimension: composite
+list_limit: 10

@@ -6,8 +6,14 @@
 import type { QueryClient } from '@tanstack/react-query';
 import type { ComponentType, ReactNode } from 'react';
 
-/** 壳层预留的插槽名。 */
-export type SlotName = 'nav' | 'overview.card' | 'header.action';
+/**
+ * 壳层预留的插槽名。
+ *
+ * `nav` 已移除（LEOY-34）：它与 `registerNavItem` 表达同一件事，而顶栏导航完全由
+ * `registerNavItem` 驱动，`registerSlot('nav', ...)` 会被静默丢弃，两套机制并存会让插件作者困惑。
+ * 详见 LEOY-23 P2-3 的 ADR 结论。
+ */
+export type SlotName = 'overview.card' | 'header.action';
 
 /** 壳层对外广播的事件。 */
 export type ShellEvent = 'repos:changed';

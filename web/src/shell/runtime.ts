@@ -28,12 +28,14 @@ import { NotFoundPage } from './NotFoundPage';
 import { PluginBoundary } from './PluginBoundary';
 import { ShellApp } from './ShellApp';
 import { SlotOutlet } from './SlotOutlet';
-import { plugins } from './registry';
+import { plugins, RegistryValidationError } from './registry';
 
 export interface ShellAssembly {
   routes: RouteObject[];
   navItems: NavItem[];
   slots: Record<SlotName, SlotRegistration[]>;
+  /** register 期因非契约异常被跳过的插件 id，供壳层诊断用（契约违规仍会直接抛出）。 */
+  skippedPluginIds: string[];
 }
 
 const shellListeners = new Map<string, Set<() => void>>();
@@ -63,60 +65,86 @@ interface CollectedRoute {
   owner: string;
 }
 
+/**
+ * register* 助手显式抛出的契约校验错误：path 冲突、导航项非法/重复、i18n 前缀不合规。
+ * 属于「插件作者写错了」的硬错误，装配期必须 fail-fast（与既有 toThrow 断言对齐）。
+ * 区别于插件 register() 内部偶发的业务异常：后者只跳过该插件，不拖垮整站。
+ */
+export class RegisterValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'RegisterValidationError';
+  }
+}
+
 export function assemble(pluginList: Plugin[], queryClient: QueryClient): ShellAssembly {
   const collected: CollectedRoute[] = [];
   const navItems: NavItem[] = [];
   const slotMap = new Map<SlotName, SlotRegistration[]>();
   const pathOwners = new Map<string, string>();
   const navOwners = new Map<string, string>();
+  const skippedPluginIds: string[] = [];
 
   const registerMessagesGuarded = (pluginId: string, messages: PluginMessages): void => {
     try {
       registerMessages(pluginId, messages);
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err);
-      throw new Error(`插件 "${pluginId}" 词条注册失败：${detail}`, { cause: err });
+      // i18n 前缀不合规属契约违规，仍须 fail-fast。
+      throw new RegisterValidationError(`插件 "${pluginId}" 词条注册失败：${detail}`);
     }
   };
 
   for (const plugin of pluginList) {
     const id = plugin.id;
 
+    // 逐插件暂存区：register* 产出先写到这里，register() 正常返回才一次性合并进全局，
+    // 保证 register() 中途抛非契约异常时该插件不留下任何半成品路由 / 导航项 / 插槽。
+    const stagedRoutes: CollectedRoute[] = [];
+    const stagedNavItems: NavItem[] = [];
+    const stagedSlots = new Map<SlotName, SlotRegistration[]>();
+    const stagedPathOwners = new Map<string, string>();
+    const stagedNavOwners = new Map<string, string>();
+
     const ctx: PluginContext = {
       registerRoute(route) {
         if (!route || typeof route.path !== 'string' || route.path === '') {
-          throw new Error(`插件 "${id}" 注册了非法路由（缺少 path）`);
+          throw new RegisterValidationError(`插件 "${id}" 注册了非法路由（缺少 path）`);
         }
         const normalized = route.path.replace(/^\/+/, '');
-        const owner = pathOwners.get(normalized);
+        const owner = stagedPathOwners.get(normalized);
         if (owner) {
-          throw new Error(`路由 path "${normalized}" 冲突：插件 "${owner}" 与 "${id}" 重复注册`);
+          throw new RegisterValidationError(
+            `路由 path "${normalized}" 冲突：插件 "${owner}" 与 "${id}" 重复注册`,
+          );
         }
-        pathOwners.set(normalized, id);
-        collected.push({ route: { ...route, path: normalized }, owner: id });
+        stagedPathOwners.set(normalized, id);
+        stagedRoutes.push({ route: { ...route, path: normalized }, owner: id });
       },
       registerNavItem(item) {
         if (!item || typeof item.to !== 'string' || item.to.trim() === '') {
-          throw new Error(`插件 "${id}" 注册了非法导航项（缺少 to）`);
+          throw new RegisterValidationError(`插件 "${id}" 注册了非法导航项（缺少 to）`);
         }
         if (typeof item.titleKey !== 'string' || item.titleKey.trim() === '') {
-          throw new Error(`插件 "${id}" 注册了非法导航项（缺少 titleKey）`);
+          throw new RegisterValidationError(`插件 "${id}" 注册了非法导航项（缺少 titleKey）`);
         }
         const normalized = normalizePath(item.to);
-        const owner = navOwners.get(normalized);
+        const owner = stagedNavOwners.get(normalized);
         if (owner) {
-          throw new Error(`导航项 to "${normalized}" 冲突：插件 "${owner}" 与 "${id}" 重复注册`);
+          throw new RegisterValidationError(
+            `导航项 to "${normalized}" 冲突：插件 "${owner}" 与 "${id}" 重复注册`,
+          );
         }
-        navOwners.set(normalized, id);
-        navItems.push(item);
+        stagedNavOwners.set(normalized, id);
+        stagedNavItems.push(item);
       },
       registerMessages(messages) {
         registerMessagesGuarded(id, messages);
       },
       registerSlot(slot, key, node) {
-        const list = slotMap.get(slot) ?? [];
-        list.push({ key, node });
-        slotMap.set(slot, list);
+        const list = stagedSlots.get(slot) ?? [];
+        list.push({ key, node, owner: id });
+        stagedSlots.set(slot, list);
       },
       on(event, handler) {
         return onShellEvent(event, handler);
@@ -125,7 +153,47 @@ export function assemble(pluginList: Plugin[], queryClient: QueryClient): ShellA
       queryClient,
     };
 
-    plugin.register(ctx);
+    try {
+      plugin.register(ctx);
+    } catch (err) {
+      // 契约违规（register* 助手的校验错误 / RegistryValidationError）继续向上抛，
+      // 装配失败、行为与现状一致；其余为插件自身异常，记录并列 id 后跳过该插件。
+      if (err instanceof RegisterValidationError || err instanceof RegistryValidationError) {
+        throw err;
+      }
+      console.error(`[shell] 插件 "${id}" register 抛错（已跳过，不影响整站装配）:`, err);
+      skippedPluginIds.push(id);
+      continue;
+    }
+
+    // 提交暂存区：合并进全局，跨插件 path / nav 冲突照旧 fail-fast。
+    for (const { route, owner } of stagedRoutes) {
+      const normalized = route.path;
+      const existing = pathOwners.get(normalized);
+      if (existing) {
+        throw new RegisterValidationError(
+          `路由 path "${normalized}" 冲突：插件 "${existing}" 与 "${owner}" 重复注册`,
+        );
+      }
+      pathOwners.set(normalized, owner);
+      collected.push({ route, owner });
+    }
+    for (const item of stagedNavItems) {
+      const normalized = normalizePath(item.to);
+      const existing = navOwners.get(normalized);
+      if (existing) {
+        throw new RegisterValidationError(
+          `导航项 to "${normalized}" 冲突：插件 "${existing}" 与 "${id}" 重复注册`,
+        );
+      }
+      navOwners.set(normalized, id);
+      navItems.push(item);
+    }
+    for (const [slot, list] of stagedSlots) {
+      const existing = slotMap.get(slot);
+      if (existing) existing.push(...list);
+      else slotMap.set(slot, list);
+    }
   }
 
   // 每个插件路由包一层错误边界：某插件抛错只在该页面降级，不整站白屏。
@@ -135,6 +203,7 @@ export function assemble(pluginList: Plugin[], queryClient: QueryClient): ShellA
     routes,
     navItems,
     slots: Object.fromEntries(slotMap) as ShellAssembly['slots'],
+    skippedPluginIds,
   };
 }
 

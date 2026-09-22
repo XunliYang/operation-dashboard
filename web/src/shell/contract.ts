@@ -39,10 +39,17 @@ export interface NavItem {
   titleKey: string;
 }
 
-/** 一次插槽注册（slot -> 若干 {key, node}）。 */
+/**
+ * 一次插槽注册（slot -> 若干 {key, node, owner}）。
+ *
+ * `key` 与 `owner` 职责不同：
+ *   - `key`：同一插槽内的节点标识，仅用于 React reconciliation（如 `people-summary`）；
+ *   - `owner`：所属插件 id（如 `people`），错误边界据此显示真实插件名，用于排障定位。
+ */
 export interface SlotRegistration {
   key: string;
   node: ReactNode;
+  owner: string;
 }
 
 /** 暴露给插件的 API 门面：复用内核信封解包，插件不得各自 fetch 外部地址。 */

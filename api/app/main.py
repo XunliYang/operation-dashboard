@@ -22,6 +22,7 @@ from app.routers.people import admin_router as people_admin_router
 from app.routers.people import router as people_router
 from app.routers.repos import router as repos_router
 from app.routers.sentiment import router as sentiment_router
+from app.routers.workbench import router as workbench_router
 
 # 不限流的路径
 RATE_LIMIT_EXEMPT = {"/healthz"}
@@ -69,6 +70,7 @@ def create_app() -> FastAPI:
     app.include_router(people_router)
     app.include_router(people_admin_router)
     app.include_router(sentiment_router)
+    app.include_router(workbench_router)
     return app
 
 

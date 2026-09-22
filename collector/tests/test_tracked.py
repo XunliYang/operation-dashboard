@@ -10,19 +10,19 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 CONFIG_DIR = REPO_ROOT / "config"
 
 
-def test_load_tracked_repos_returns_13_openan_repos():
+def test_load_tracked_repos_returns_14_openan_repos():
     repos = load_tracked_repos(str(CONFIG_DIR))
 
     names = [r["repo"] for r in repos]
-    assert len(repos) == 13
+    assert len(repos) == 14
     assert all(name.startswith("project-openan/") for name in names)
     assert all(r["org"] == "openan" for r in repos)
 
 
-def test_org_config_repo_is_excluded():
+def test_org_config_repo_is_included():
     names = [r["repo"] for r in load_tracked_repos(str(CONFIG_DIR))]
 
-    assert "project-openan/.github" not in names
+    assert "project-openan/.github" in names
 
 
 def test_org_mapping_openan_is_self_consistent_with_tracked_repos():
@@ -31,4 +31,4 @@ def test_org_mapping_openan_is_self_consistent_with_tracked_repos():
 
     assert mapping["default_org"] == "openan"
     assert set(mapping["orgs"]["openan"]["repos"]) == enabled
-    assert "project-openan/.github" not in mapping["orgs"]["openan"]["repos"]
+    assert "project-openan/.github" in mapping["orgs"]["openan"]["repos"]

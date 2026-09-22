@@ -93,6 +93,9 @@ class _FakeConn:
     def fetchone(self):
         return (1,)
 
+    def fetchall(self):
+        return []
+
     def commit(self) -> None:
         self.commits += 1
 
@@ -143,7 +146,9 @@ def test_collect_repos_breaks_on_rate_limit_exhausted(monkeypatch):
 
     fake = _FakeCollector(None, None, backfill_days=90)
     fake.exhausted_on = {"a/b2"}
-    monkeypatch.setattr(jobs, "GitHubCollector", lambda client, conn, *, backfill_days: fake)
+    monkeypatch.setattr(
+        jobs, "GitHubCollector", lambda client, conn, *, backfill_days, email_hash_salt: fake
+    )
 
     client = _FakeClient(remaining=0, reset_epoch=time.time() + 3600)
     conn = _FakeConn()
@@ -166,7 +171,9 @@ def test_collect_repos_records_remaining_on_generic_failure(monkeypatch):
 
     fake = _FakeCollector(None, None, backfill_days=90)
     fake.raise_on = {"a/b2"}
-    monkeypatch.setattr(jobs, "GitHubCollector", lambda client, conn, *, backfill_days: fake)
+    monkeypatch.setattr(
+        jobs, "GitHubCollector", lambda client, conn, *, backfill_days, email_hash_salt: fake
+    )
 
     client = _FakeClient(remaining=7)
     conn = _FakeConn()
@@ -178,6 +185,36 @@ def test_collect_repos_records_remaining_on_generic_failure(monkeypatch):
     failed = [f for f in finishes if f["status"] == "failed"]
     assert len(failed) == 1
     assert failed[0]["rate_limit_remaining"] == 7
+
+
+def test_collect_repos_sorts_least_recently_successful_first(monkeypatch):
+    """配额治理：从未成功 / 最旧成功的仓库排最前，下一轮从断点续采。"""
+    from datetime import UTC, datetime, timedelta
+
+    finishes: list[dict] = []
+    _patch_db(monkeypatch, finishes)
+
+    fake = _FakeCollector(None, None, backfill_days=90)
+    monkeypatch.setattr(
+        jobs, "GitHubCollector", lambda client, conn, *, backfill_days, email_hash_salt: fake
+    )
+
+    now = datetime.now(UTC)
+    monkeypatch.setattr(
+        jobs.db,
+        "last_success_by_repo",
+        lambda conn: {
+            "a/b1": now - timedelta(minutes=30),
+            "a/b3": now - timedelta(minutes=60),
+            "a/b2": None,  # 从未成功 → 最优先
+        },
+    )
+
+    client = _FakeClient(remaining=100)
+    conn = _FakeConn()
+    collect_repos(_repos(), client, conn, backfill_days=90)
+
+    assert fake.calls == ["a/b2", "a/b3", "a/b1"]
 
 
 # --- P1-3 / LEOY-20：queued 消费 + full_backfill 区分 ---

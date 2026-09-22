@@ -55,7 +55,10 @@ services:
 
   collector:
     build:
-      context: ../collector
+      # 构建上下文指向 monorepo 根：collector/Dockerfile 需 COPY api/app 以复用
+      # app.services.org_classifier（分类优先级 + 邮箱哈希/脱敏的 canonical 实现）。
+      context: ..
+      dockerfile: collector/Dockerfile
     container_name: od-collector
     environment:
       OD_REDIS_URL: redis://redis:6379/0

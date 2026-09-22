@@ -11,10 +11,12 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 
 from loguru import logger
 
 import collector.db as db
+from collector.classify import classify_contributors
 from collector.collector import GitHubCollector
 from collector.config import get_settings
 from collector.github.client import GitHubClient, RateLimitExceeded
@@ -120,14 +122,26 @@ def collect_repos(
     *,
     backfill_days: int,
     job: str = "github_incremental",
+    email_hash_salt: str = "operation-dashboard-dev-salt",
 ) -> dict[str, int]:
     """逐仓库跑一轮增量采集，逐仓库记一条 collect_run。
 
     配额耗尽（`RateLimitExceeded`）时中断本轮：之后每个仓库的请求注定 403，
     记录余量与 reset 时间后停下，避免在配额窗口内刷屏失败记录。返回
     `{collected, failed, skipped}` 统计。
+
+    配额治理取舍（二选一，选 a）：按「最久未成功采集」排序（用 collect_run 的
+    `MAX(finished_at) FILTER (WHERE status='success')`），从未成功 / 最旧优先。
+    这样配额耗尽中断本轮后，被跳过的仓库下一轮排在最前、从断点续采，而不是每轮
+    都从 tracked_repos.yaml 的第 1 个仓库重来、永远只喂饱前 1–2 个仓库。
     """
-    collector = GitHubCollector(client, conn, backfill_days=backfill_days)
+    collector = GitHubCollector(
+        client, conn, backfill_days=backfill_days, email_hash_salt=email_hash_salt
+    )
+    # 公平续采：从未成功 / 最旧优先（sorted 稳定，全部并列时保持 yaml 原始顺序）。
+    last_success = db.last_success_by_repo(conn)
+    epoch = datetime.min.replace(tzinfo=UTC)
+    repos = sorted(repos, key=lambda r: last_success.get(r["repo"]) or epoch)
     total = len(repos)
     collected = 0
     failed = 0
@@ -190,7 +204,12 @@ def collect_github_activity() -> None:
     )
 
     with db.connect_db(settings.database_url) as conn:
-        collector = GitHubCollector(client, conn, backfill_days=settings.backfill_days)
+        collector = GitHubCollector(
+            client,
+            conn,
+            backfill_days=settings.backfill_days,
+            email_hash_salt=settings.email_hash_salt,
+        )
         _drain_queued(conn, collector, settings)
 
         repos = load_tracked_repos(settings.config_dir)
@@ -198,9 +217,19 @@ def collect_github_activity() -> None:
             logger.warning("tracked_repos.yaml 无启用的仓库，跳过兜底采集")
             return
 
-        stats = collect_repos(repos, client, conn, backfill_days=settings.backfill_days)
+        stats = collect_repos(
+            repos,
+            client,
+            conn,
+            backfill_days=settings.backfill_days,
+            email_hash_salt=settings.email_hash_salt,
+        )
         if stats["skipped"]:
             logger.warning("本轮因配额耗尽跳过 {} 个仓库", stats["skipped"])
+
+        # 收尾：邮箱域名组织分类（幂等）。每轮采集后跑一次（默认 600s），
+        # 把新摄入的 email_domain 落地为 dim_org / bridge_contributor_org。
+        classify_contributors(conn, settings.config_dir)
 
 
 def collect_sentiment() -> None:

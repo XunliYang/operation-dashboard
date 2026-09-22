@@ -94,13 +94,15 @@ def test_upsert_contributor_persists_hashed_email_fields():
         email_hash="deadbeef",
         email_masked="a***@huawei.com",
         email_domain="huawei.com",
+        email_plain="alice@huawei.com",
     )
     assert conn.sql is not None and "email_hash" in conn.sql and "email_masked" in conn.sql
-    assert "email_domain" in conn.sql
-    # 明文邮箱绝不落库：params 里是脱敏形，不含明文
+    assert "email_domain" in conn.sql and "email_plain" in conn.sql
+    # 三列同写：脱敏形、域名、明文（需求方 2026-09-22 拍板「明文，不脱敏」）
     joined = " ".join(str(p) for p in (conn.params or ()))
     assert "a***@huawei.com" in joined
     assert "huawei.com" in joined
+    assert "alice@huawei.com" in joined
 
 
 def test_upsert_contributor_coalesces_email_on_update():
@@ -108,6 +110,7 @@ def test_upsert_contributor_coalesces_email_on_update():
     conn = _RecordingConn()
     db.upsert_contributor(conn, gh_login="alice", gh_id=1, display_name="a", seen_at=_TS)
     assert "email_hash = COALESCE(EXCLUDED.email_hash, dim_contributor.email_hash)" in conn.sql
+    assert "email_plain = COALESCE(EXCLUDED.email_plain, dim_contributor.email_plain)" in conn.sql
 
 
 def test_upsert_code_weekly_overwrites_on_conflict():

@@ -86,9 +86,12 @@ repos:
     enabled: true
     weight: 1.0
     labels: []
-
-  # project-openan/.github 为纯组织配置仓（org profile / 组织级 workflow 等），
-  # 不承载业务代码，默认排除；如需跟踪可显式加回。
+  # 组织配置仓（org profile / 组织级 workflow 等），需求方要求「所有仓库」都纳入。
+  - repo: project-openan/.github
+    org: openan
+    enabled: true
+    weight: 1.0
+    labels: []
 
   # ---- 自测 / 冒烟项（不纳入默认采集） ----
   # XunliYang/operation-dashboard 是本 monorepo 自身，Phase 0/1 的自测目标；

@@ -10,11 +10,11 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime, timedelta
 
+from app.services.org_classifier import email_domain, hash_email, mask_email
 from loguru import logger
 from psycopg import Connection
 
 import collector.db as db
-from app.services.org_classifier import email_domain, hash_email, mask_email
 from collector.github.client import GitHubClient, RateLimitExceeded
 
 # GraphQL 仓库快照查询（Phase 1 主路径仍走 REST；GraphQL 批量拉取为后续优化）
@@ -69,8 +69,9 @@ class GitHubCollector:
             or _utcnow()
         )
         login, gh_id = _user(c.get("author"))
-        # 明文邮箱只在采集/分类的瞬态内存中出现，落库前转哈希/脱敏（隐私红线，
-        # 见 api/migrations/0003_org_people.sql 的约定）；email_domain 非 PII 可明文存。
+        # email_hash / email_masked 仍照写（脱敏展示形）；email_plain 为需求方
+        # 2026-09-22 拍板的明文落库（有意放宽 0003 的「明文绝不持久化」约定），
+        # 明文只允许进入 dim_contributor.email_plain 一列，绝不写日志/错误信息。
         email = author.get("email")
         author_id = db.upsert_contributor(
             self.conn,
@@ -81,6 +82,7 @@ class GitHubCollector:
             email_hash=hash_email(email, self.email_hash_salt) if email else None,
             email_masked=mask_email(email) if email else None,
             email_domain=email_domain(email) if email else None,
+            email_plain=email,
         )
         is_merge = len(c.get("parents") or []) > 1
         db.upsert_commit(

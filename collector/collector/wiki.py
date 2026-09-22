@@ -1,6 +1,6 @@
 """wiki 采集：`git clone --bare <repo>.wiki.git` → `git log` → `fact_wiki_revision`。
 
-关键实测事实：OpenAN 13 仓的 wiki 仓库全部不存在（`git ls-remote` 返回
+关键实测事实：OpenAN 14 仓的 wiki 仓库全部不存在（`git ls-remote` 返回
 `Repository not found`），但其中 9 仓 `has_wiki=true`。所以「仓库不存在 / 无 wiki」
 是**正常路径**：必须记 0 条修订且不抛异常、不写 failed collect_run。
 
@@ -19,10 +19,10 @@ import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 
+from app.services.org_classifier import hash_email
 from loguru import logger
 
 import collector.db as db
-from app.services.org_classifier import hash_email
 
 _CLONE_TIMEOUT = 120
 _LOG_TIMEOUT = 60

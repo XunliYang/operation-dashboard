@@ -15,9 +15,6 @@
 
 from __future__ import annotations
 
-from loguru import logger
-
-import collector.db as db
 from app.services.org_classifier import (
     SOURCE_INFERRED,
     SOURCE_MANUAL_YAML,
@@ -26,6 +23,9 @@ from app.services.org_classifier import (
     classify,
     load_org_mapping,
 )
+from loguru import logger
+
+import collector.db as db
 
 
 def classify_contributors(conn, config_dir: str) -> int:

@@ -16,6 +16,13 @@
 ALTER TABLE dim_contributor ADD COLUMN IF NOT EXISTS email_domain TEXT;
 CREATE INDEX IF NOT EXISTS idx_contributor_email_domain ON dim_contributor (email_domain);
 
+-- 明文邮箱（需求方 2026-09-22 明确要求「明文，不脱敏」）。
+-- 背景：0003_org_people.sql 的隐私约定为「明文绝不持久化」，本列是对该约定的
+-- 有意放宽（决策见 LEOY-43 评论，需求方拍板）。email_hash / email_masked 仍照写，
+-- 本列为增量而非替换；明文只允许存在于 dim_contributor.email_plain 一列，不得进
+-- 日志、collect_run.error 或任何前端可匿名访问的响应。
+ALTER TABLE dim_contributor ADD COLUMN IF NOT EXISTS email_plain TEXT;
+
 CREATE TABLE IF NOT EXISTS fact_contributor_code_weekly (
     repo_id      BIGINT NOT NULL REFERENCES dim_repo(repo_id),
     author_id    BIGINT REFERENCES dim_contributor(contributor_id),

@@ -17,6 +17,6 @@ def test_openan_default_org_and_repo_list_consistent():
 
     assert mapping["default_org"] == "openan"
     assert enabled == openan_repos
-    assert len(enabled) == 13
+    assert len(enabled) == 14
     assert all(name.startswith("project-openan/") for name in enabled)
-    assert "project-openan/.github" not in enabled
+    assert "project-openan/.github" in enabled

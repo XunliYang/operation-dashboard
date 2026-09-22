@@ -15,12 +15,19 @@ CONFIG_DIR = REPO_ROOT / "config"
 def test_real_mapping_domain_to_org():
     mapping = load_org_mapping(str(CONFIG_DIR))
     assert classify(login="a", email="x@huawei.com", mapping=mapping).org_key == "huawei"
-    assert classify(login="a", email="x@h-partners.com", mapping=mapping).org_key == "huawei-partner"
+    # h-partners.com 并入 huawei 成「华为系」（需求方 2026-09-22 拍板），不再是独立键
+    assert classify(login="a", email="x@h-partners.com", mapping=mapping).org_key == "huawei"
     assert classify(login="a", email="x@zte.com.cn", mapping=mapping).org_key == "zte"
     assert classify(login="a", email="x@gdcattsoft.com", mapping=mapping).org_key == "gdcattsoft"
     # GitHub 占位邮箱 → external，不得误判成某个公司
     assert classify(login="a", email="x@users.noreply.github.com", mapping=mapping).org_key == "external"
     assert classify(login="a", email="noreply@github.com", mapping=mapping).org_key == "external"
+
+
+def test_no_huawei_partner_org_key():
+    mapping = load_org_mapping(str(CONFIG_DIR))
+    assert "huawei-partner" not in mapping.orgs
+    assert mapping.orgs["huawei"].display == "华为系"
 
 
 def test_email_domain_source_is_06():

@@ -193,7 +193,8 @@ def test_ingest_commit_persists_hashed_email(monkeypatch):
     assert captured["email_masked"] == "a***@huawei.com"
     assert captured["email_domain"] == "huawei.com"
     assert captured["email_hash"] == hash_email("Alice@Huawei.com", "salt")
-    # 明文邮箱不落库（哈希不包含明文）
+    # 明文落库（需求方 2026-09-22 拍板「明文，不脱敏」），但哈希不包含明文
+    assert captured["email_plain"] == "Alice@Huawei.com"
     assert "Alice@Huawei.com" not in captured["email_hash"]
 
 

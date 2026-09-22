@@ -57,14 +57,15 @@ def upsert_contributor(
     email_hash: str | None = None,
     email_masked: str | None = None,
     email_domain: str | None = None,
+    email_plain: str | None = None,
 ) -> int | None:
     if not gh_login:
         return None
     row = conn.execute(
         "INSERT INTO dim_contributor"
         " (gh_login, gh_id, display_name, first_seen_at, last_seen_at,"
-        "  email_hash, email_masked, email_domain)"
-        " VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"
+        "  email_hash, email_masked, email_domain, email_plain)"
+        " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"
         " ON CONFLICT (gh_login) DO UPDATE SET"
         "   gh_id = COALESCE(dim_contributor.gh_id, EXCLUDED.gh_id),"
         "   display_name = COALESCE(dim_contributor.display_name, EXCLUDED.display_name),"
@@ -72,10 +73,11 @@ def upsert_contributor(
         "   last_seen_at = GREATEST(dim_contributor.last_seen_at, EXCLUDED.last_seen_at),"
         "   email_hash = COALESCE(EXCLUDED.email_hash, dim_contributor.email_hash),"
         "   email_masked = COALESCE(EXCLUDED.email_masked, dim_contributor.email_masked),"
-        "   email_domain = COALESCE(EXCLUDED.email_domain, dim_contributor.email_domain)"
+        "   email_domain = COALESCE(EXCLUDED.email_domain, dim_contributor.email_domain),"
+        "   email_plain = COALESCE(EXCLUDED.email_plain, dim_contributor.email_plain)"
         " RETURNING contributor_id",
         (gh_login, gh_id, display_name, seen_at, seen_at,
-         email_hash, email_masked, email_domain),
+         email_hash, email_masked, email_domain, email_plain),
     ).fetchone()
     return row[0]
 

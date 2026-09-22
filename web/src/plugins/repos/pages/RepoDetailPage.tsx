@@ -63,8 +63,8 @@ export function RepoDetailPage() {
   return (
     <div>
       <PageHeader
-        title={detail.data ? detail.data.name : t('common.loading')}
-        description={detail.data ? detail.data.full_name : t('common.loading')}
+        title={detail.data ? detail.data.name : repoId || t('repos.title')}
+        description={detail.data ? detail.data.full_name : undefined}
         actions={
           detail.data ? (
             <Badge tone={detail.data.health.score >= 60 ? 'success' : 'warning'}>

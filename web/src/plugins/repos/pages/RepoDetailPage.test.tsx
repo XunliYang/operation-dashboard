@@ -49,17 +49,23 @@ const COMMITS_SERIES = {
   series: [{ date: '2026-09-21', value: 10 }],
 };
 
-function renderPage() {
+function renderPage(id = '1') {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={['/repos/1']}>
+      <MemoryRouter initialEntries={[`/repos/${id}`]}>
         <Routes>
           <Route path="/repos/:id" element={<RepoDetailPage />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
   );
+}
+
+function notFoundResponse() {
+  return new Response(JSON.stringify({ code: 40400, message: 'repo not found: 999' }), {
+    status: 404,
+  });
 }
 
 afterEach(() => {
@@ -81,5 +87,20 @@ describe('RepoDetailPage', () => {
     const heading = await screen.findByRole('heading', { level: 1, name: 'registry-center' });
     expect(heading).not.toHaveTextContent('1');
     expect(screen.getByText('project-openan/registry-center')).toBeInTheDocument();
+  });
+
+  it('错误路径下页头标题回退 repoId，不停留「加载中…」', async () => {
+    globalThis.fetch = vi.fn(async () => notFoundResponse()) as typeof fetch;
+
+    renderPage('999');
+
+    // 主体渲染错误空态。
+    const errorState = await screen.findByText('加载仓库数据失败');
+    expect(errorState).toBeInTheDocument();
+
+    // 页头标题回退为 repoId，且不出现加载占位文案。
+    const heading = screen.getByRole('heading', { level: 1 });
+    expect(heading).toHaveTextContent('999');
+    expect(screen.queryByText('加载中…')).not.toBeInTheDocument();
   });
 });

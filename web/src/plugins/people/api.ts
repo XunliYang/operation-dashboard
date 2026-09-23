@@ -7,6 +7,7 @@ export interface Member {
   id: string;
   login: string | null;
   email_masked: string | null;
+  email: string | null;
   org_id: string | null;
   role: string | null;
   confidence: number | null;

@@ -135,9 +135,14 @@ function MemberRow({ member, onSelect }: { member: Member; onSelect: () => void 
           ) : null}
           <TierBadge tier={member.tier} />
         </div>
+        <div className="mt-0.5 text-xs" style={{ color: 'var(--c-text2)' }}>
+          {member.email ?? '—'}
+        </div>
         <div className="mt-0.5 text-xs" style={{ color: 'var(--c-text3)' }}>
-          {sourceLabel(member.source)}
-          {typeof member.confidence === 'number' ? ` · conf ${member.confidence.toFixed(2)}` : ''}
+          {t('people.member.source')} {sourceLabel(member.source)}
+          {typeof member.confidence === 'number'
+            ? ` · ${t('people.member.confidence')} ${member.confidence.toFixed(2)}`
+            : ''}
         </div>
       </div>
       <div className="shrink-0 text-right text-xs" style={{ color: 'var(--c-text2)' }}>

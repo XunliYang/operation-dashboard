@@ -115,10 +115,10 @@ def _board_fixture():
         OrgRow(2, "core", "team", None, 1),
     ]
     members = [
-        MemberRow(1, "alice", "a***@openan.org", NOW - timedelta(days=2), 1, "maintainer", 1.0, "manual_yaml", 100),
-        MemberRow(2, "bob", "b***@openan.org", NOW - timedelta(days=45), 2, "maintainer", 0.8, "api", 60),
-        MemberRow(3, "carol", "c***@huawei.com", NOW - timedelta(days=3), 1, None, 0.6, "email_domain", 40),
-        MemberRow(4, "dave", None, None, None, None, None, None, 0),  # 待归类
+        MemberRow(1, "alice", "a***@openan.org", "alice@openan.org", NOW - timedelta(days=2), 1, "maintainer", 1.0, "manual_yaml", 100),
+        MemberRow(2, "bob", "b***@openan.org", "bob@openan.org", NOW - timedelta(days=45), 2, "maintainer", 0.8, "api", 60),
+        MemberRow(3, "carol", "c***@huawei.com", "carol@huawei.com", NOW - timedelta(days=3), 1, None, 0.6, "email_domain", 40),
+        MemberRow(4, "dave", "d***@openan.org", None, None, None, None, None, None, 0),  # 待归类 + 无明文邮箱
     ]
     return orgs, members
 
@@ -206,15 +206,29 @@ def _board_responses(fake: _FakeConn) -> None:
     fake.set(
         "LEFT JOIN bridge_contributor_org b",
         [
-            (1, "alice", "a***@openan.org", NOW - timedelta(days=2), 1, "maintainer", 1.0, "manual_yaml"),
-            (2, "bob", "b***@openan.org", NOW - timedelta(days=45), 1, None, 0.8, "api"),
-            (3, "carol", None, None, None, None, None, None),
+            (1, "alice", "a***@openan.org", "alice@openan.org", NOW - timedelta(days=2), 1, "maintainer", 1.0, "manual_yaml"),
+            (2, "bob", "b***@openan.org", "bob@openan.org", NOW - timedelta(days=45), 1, None, 0.8, "api"),
+            (3, "carol", None, None, None, None, None, None, None),
         ],
     )
     fake.set("FROM fact_commit", [(1, 5), (2, 3)])
     fake.set("FROM fact_pull_request", [(1, 2)])
     fake.set("FROM fact_review", [(2, 1)])
     fake.set("SELECT canonical_id, merged_id, status FROM identity_merge", [])
+
+
+def test_build_org_board_member_has_plaintext_email_and_null_when_absent():
+    orgs, members = _board_fixture()
+    board = build_org_board(orgs, members, [], as_of=NOW)
+
+    by_login = {m["login"]: m for m in board["orgs"][0]["members"]}
+    # 成员行回吐明文 email（email_plain），脱敏形另立 email_masked
+    assert by_login["alice"]["email"] == "alice@openan.org"
+    assert by_login["alice"]["email_masked"] == "a***@openan.org"
+    # email_plain 为空 → email 为 null，且不回退到脱敏形
+    unclassified = {m["login"]: m for m in board["unclassified"]}
+    assert unclassified["dave"]["email"] is None
+    assert unclassified["dave"]["email_masked"] == "d***@openan.org"
 
 
 def test_list_orgs_returns_envelope_with_unclassified(client, app):

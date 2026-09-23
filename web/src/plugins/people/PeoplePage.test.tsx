@@ -32,6 +32,7 @@ const board: OrgBoard = {
           id: '1',
           login: 'alice',
           email_masked: 'a***@openan.org',
+          email: 'alice@openan.org',
           org_id: '1',
           role: 'maintainer',
           confidence: 1.0,
@@ -45,6 +46,7 @@ const board: OrgBoard = {
           id: '2',
           login: 'bob',
           email_masked: 'b***@openan.org',
+          email: 'bob@openan.org',
           org_id: '1',
           role: 'maintainer',
           confidence: 0.8,
@@ -63,6 +65,7 @@ const board: OrgBoard = {
       id: '3',
       login: 'carol',
       email_masked: null,
+      email: null,
       org_id: null,
       role: null,
       confidence: 0.0,
@@ -103,6 +106,11 @@ describe('PeoplePage', () => {
     expect(await screen.findByText('OpenAN')).toBeInTheDocument();
     expect(screen.getByText('@alice')).toBeInTheDocument();
     expect(screen.getByText('@bob')).toBeInTheDocument();
+    // 成员行展示明文邮箱
+    expect(screen.getByText('alice@openan.org')).toBeInTheDocument();
+    expect(screen.getByText('bob@openan.org')).toBeInTheDocument();
+    // 归属来源 / 置信度带标签，不再与邮箱混淆
+    expect(screen.getByText('归属来源 manual_yaml · 置信度 1.00')).toBeInTheDocument();
     // 停滞告警卡（关键维护者停滞）
     expect(screen.getByText('关键维护者停滞')).toBeInTheDocument();
     // 待归类显式呈现

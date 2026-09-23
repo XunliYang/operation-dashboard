@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 
 import { HealthRadarChart } from '@/components/charts/HealthRadarChart';
 import { MetricTrendChart } from '@/components/charts/MetricTrendChart';
@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { PageHeader } from '@/components/ui/PageHeader';
+import { CONTRIBUTION_METRIC_KEYS, contributionsApi, formatNumber } from '@/core/api/contributions';
 import { queryKeys } from '@/core/api/queryKeys';
 import { reposApi } from '@/core/api/repos';
 import { useI18n } from '@/core/i18n';
@@ -118,8 +119,83 @@ export function RepoDetailPage() {
               <EmptyState title="暂无提交数据" />
             )}
           </Card>
+
+          <ContributionCard repoId={repoId} />
         </div>
       )}
     </div>
+  );
+}
+
+/** 仓库维度的贡献度卡片：五口径汇总 + TOP 贡献者 + 跳转贡献度看板。 */
+function ContributionCard({ repoId }: { repoId: string }) {
+  const { t } = useI18n();
+
+  const summary = useQuery({
+    queryKey: queryKeys.contributionsSummary('repo', 'commits', null, repoId, ''),
+    queryFn: () => contributionsApi.summary({ groupBy: 'repo', metric: 'commits', repo: repoId }),
+    enabled: repoId !== '',
+  });
+
+  const top = useQuery({
+    queryKey: queryKeys.contributionsLeaderboard('repo', repoId, 'commits', ''),
+    queryFn: () =>
+      contributionsApi.leaderboard({ dimension: 'repo', scope: repoId, metric: 'commits', limit: 5 }),
+    enabled: repoId !== '',
+  });
+
+  const group = summary.data?.groups?.[0];
+  const topContributors = top.data?.contributors ?? [];
+
+  return (
+    <Card title={t('contributions.repoCard.title')} className="lg:col-span-2">
+      {group ? (
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid grid-cols-5 gap-2">
+            {CONTRIBUTION_METRIC_KEYS.map((m) => (
+              <div key={m} className="rounded-md bg-slate-50 p-2 text-center">
+                <p className="text-xs text-slate-500">{t(`contributions.metric.${m}`)}</p>
+                <p className="mt-1 text-lg font-semibold tabular-nums text-slate-900">
+                  {formatNumber(m === 'code' ? group.metrics.code_total : group.metrics[m])}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          <div>
+            <p className="text-xs font-medium text-slate-500">
+              {t('contributions.repoCard.top')}
+            </p>
+            <ul className="mt-2 space-y-1">
+              {topContributors.map((c) => (
+                <li
+                  key={c.contributor_id}
+                  className="flex items-center justify-between gap-2 py-1 text-sm"
+                >
+                  <span className="flex min-w-0 items-center gap-2">
+                    {c.avatar_url ? (
+                      <img src={c.avatar_url} alt="" className="h-5 w-5 shrink-0 rounded-full" />
+                    ) : null}
+                    <span className="truncate">@{c.login ?? c.contributor_id}</span>
+                  </span>
+                  <span className="tabular-nums text-slate-500">{formatNumber(c.metric_value)}</span>
+                </li>
+              ))}
+              {topContributors.length === 0 ? (
+                <li className="text-sm text-slate-400">{t('common.loading')}</li>
+              ) : null}
+            </ul>
+            <Link
+              to={`/contributions?repo=${repoId}`}
+              className="mt-3 inline-block text-sm font-medium text-brand-700 hover:underline"
+            >
+              {t('contributions.repoCard.viewAll')}
+            </Link>
+          </div>
+        </div>
+      ) : (
+        <p className="text-sm text-slate-500">{t('common.loading')}</p>
+      )}
+    </Card>
   );
 }

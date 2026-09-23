@@ -7,4 +7,18 @@ export const queryKeys = {
   repoMetric: (id: string, metric: string) => ['repos', 'detail', id, 'metric', metric] as const,
   people: (org: string | null = null) => ['people', org] as const,
   sentiment: (range: string) => ['sentiment', range] as const,
+  contributionsSummary: (
+    groupBy: string,
+    metric: string,
+    org: string | null,
+    repo: string | null,
+    range: string,
+  ) => ['contributions', 'summary', groupBy, metric, org, repo, range] as const,
+  contributionsLeaderboard: (
+    dimension: string,
+    scope: string | null,
+    metric: string,
+    range: string,
+  ) => ['contributions', 'leaderboard', dimension, scope, metric, range] as const,
+  contributorDetail: (id: string) => ['contributions', 'contributor', id] as const,
 } as const;

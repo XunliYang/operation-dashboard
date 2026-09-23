@@ -115,6 +115,126 @@ export interface Contributor {
   last_seen: string | null;
 }
 
+/** 贡献度五口径键（对应 `api/app/services/contributions.py` 的 METRICS）。 */
+export type ContributionMetricKey = 'prs' | 'commits' | 'code' | 'issues' | 'wiki';
+
+/** 贡献度五口径数值（`full_metrics` 的 JSON 形状）。 */
+export interface ContributionMetrics {
+  prs: number;
+  commits: number;
+  code_additions: number;
+  code_deletions: number;
+  code_total: number;
+  issues: number;
+  wiki: number;
+}
+
+/** 当前口径的展示元数据（summary 响应的 `metric_meta`）。 */
+export interface MetricMeta {
+  key: ContributionMetricKey;
+  label: string;
+  unit: string;
+}
+
+/** 贡献度汇总分组（组织 / 仓库两维度）。 */
+export interface ContributionGroup {
+  key: string;
+  kind: 'org' | 'repo';
+  name: string;
+  full_name: string | null;
+  contributor_count: number;
+  metric_value: number;
+  metrics: ContributionMetrics;
+}
+
+/** `GET /dashboard/contributions/summary` 的 data 载荷。 */
+export interface ContributionsSummary {
+  group_by: 'org' | 'repo';
+  metric: ContributionMetricKey;
+  range: { from: string | null; to: string | null };
+  metric_meta: MetricMeta;
+  totals: { metric_value: number; contributor_count: number; group_count: number };
+  groups: ContributionGroup[];
+}
+
+/** 榜单每项的 `org` 块。 */
+export interface ContributorOrg {
+  key: string;
+  display: string;
+  source: string | null;
+  confidence: number | null;
+}
+
+/** 榜单每项的 `repos[]` 切片。 */
+export interface ContributorRepoSlice {
+  id: string;
+  full_name: string | null;
+  metric_value: number;
+}
+
+/** 榜单每项（`contributor_id` 后端返回字符串，逐一对齐契约）。 */
+export interface RankedContributor {
+  rank: number;
+  contributor_id: string;
+  login: string | null;
+  display_name: string | null;
+  avatar_url: string | null;
+  /** 明文邮箱（需求方 2026-09-22 拍板：明文、不脱敏）。 */
+  email: string | null;
+  email_masked: string | null;
+  org: ContributorOrg;
+  metrics: ContributionMetrics;
+  metric_value: number;
+  first_seen_at: string | null;
+  last_seen_at: string | null;
+  repos: ContributorRepoSlice[];
+}
+
+/** `GET /dashboard/contributions/leaderboard` 的 data 载荷。 */
+export interface Leaderboard {
+  dimension: 'org' | 'repo' | 'project';
+  scope: string | null;
+  metric: ContributionMetricKey;
+  range: { from: string | null; to: string | null };
+  total_contributors: number;
+  contributors: RankedContributor[];
+}
+
+/** `GET /dashboard/contributors/{id}` 的 `contributions` 块。 */
+export interface ContributorContributions {
+  metrics: ContributionMetrics;
+  by_org: Array<{
+    org_id: string;
+    key: string;
+    name: string;
+    metrics: ContributionMetrics;
+  }>;
+  by_repo: Array<{ id: string; full_name: string | null; metrics: ContributionMetrics }>;
+}
+
+/** 贡献者画像（`GET /dashboard/contributors/{id}` 扩展后的完整形状）。 */
+export interface ContributorDetail {
+  id: string;
+  login: string | null;
+  display_name: string | null;
+  email: string | null;
+  email_masked: string | null;
+  company: string | null;
+  first_seen_at: string | null;
+  last_seen_at: string | null;
+  orgs: Array<{
+    org_id: string;
+    name: string;
+    kind: string;
+    role: string | null;
+    confidence: number;
+    source: string;
+  }>;
+  repos: Array<{ id: string; full_name: string }>;
+  activity: { commits: number; prs: number; reviews: number };
+  contributions: ContributorContributions;
+}
+
 export interface PersonSummary {
   login: string;
   displayName: string;

@@ -69,14 +69,8 @@ export interface ContributorProfile {
   activity: { commits: number; prs: number; reviews: number };
 }
 
-/** GitHub 头像 / 主页外链（与参考站一致：头像 + @login 外链）。 */
-export function githubAvatar(login: string): string {
-  return `https://github.com/${login}.png`;
-}
-
-export function githubProfile(login: string): string {
-  return `https://github.com/${login}`;
-}
+/** GitHub 头像 / 主页外链：上提到 `core/api/github` 供多插件复用，此处保留 re-export。 */
+export { githubAvatar, githubProfile } from '@/core/api/github';
 
 export const peopleApi = {
   board: () => request<OrgBoard>('/dashboard/orgs'),

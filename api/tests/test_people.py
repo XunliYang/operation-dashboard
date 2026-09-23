@@ -231,27 +231,45 @@ def test_list_orgs_returns_envelope_with_unclassified(client, app):
     assert body["data"]["orgs"][0]["name"] == "OpenAN"
 
 
-def test_contributor_detail_masks_email(client, app):
+def test_contributor_detail_plaintext_email_and_contributions(client, app):
     fake = _FakeConn()
     fake.set(
         "FROM dim_contributor WHERE contributor_id",
-        [(7, "zhang", "Zhang Wei", "z***@huawei.com", "Huawei", None, None)],
+        [(7, "zhang", "Zhang Wei", "zhang@huawei.com", "z***@huawei.com", "Huawei", None, None)],
     )
-    fake.set("FROM bridge_contributor_org b", [])
-    fake.set("FROM fact_commit fc JOIN dim_repo", [])
-    fake.set("COUNT(*)::int FROM fact_commit", [(10,)])
-    fake.set("COUNT(*)::int FROM fact_pull_request", [(3,)])
-    fake.set("COUNT(*)::int FROM fact_review", [(5,)])
+    fake.set(
+        "FROM bridge_contributor_org b",
+        [(3, "华为系", "org", "huawei", None, 0.6, "email_domain")],
+    )
+    fake.set("FROM fact_commit fc JOIN dim_repo", [(165, "project-openan", "registry-center")])
+    fake.set("SELECT COUNT(*)::int FROM fact_commit", [(10,)])
+    fake.set("SELECT COUNT(*)::int FROM fact_pull_request", [(3,)])
+    fake.set("SELECT COUNT(*)::int FROM fact_review", [(5,)])
+    fake.set("SELECT COUNT(*)::int FROM fact_issue", [(4,)])
+    fake.set("SELECT COUNT(*)::int FROM fact_wiki_revision", [(0,)])
+    fake.set("COALESCE(SUM(additions)", [(100, 20)])
     _install(fake, app)
 
     resp = client.get("/dashboard/contributors/7")
 
     body = resp.json()
     assert body["code"] == 0
-    assert body["data"]["email"] == "z***@huawei.com"
-    # 明文邮箱绝不出现在响应里
-    assert "huawei.com" not in str(body["data"]).replace("z***@huawei.com", "")
+    # 需求方 2026-09-22 拍板：email 取明文 email_plain，脱敏形另立 email_masked。
+    assert body["data"]["email"] == "zhang@huawei.com"
+    assert body["data"]["email_masked"] == "z***@huawei.com"
     assert body["data"]["activity"] == {"commits": 10, "prs": 3, "reviews": 5}
+
+    contributions = body["data"]["contributions"]
+    assert contributions["metrics"]["commits"] == 10
+    assert contributions["metrics"]["prs"] == 3
+    assert contributions["metrics"]["issues"] == 4
+    assert contributions["metrics"]["wiki"] == 0
+    assert contributions["metrics"]["code_additions"] == 100
+    assert contributions["metrics"]["code_deletions"] == 20
+    assert contributions["metrics"]["code_total"] == 120
+    assert contributions["by_org"][0]["key"] == "huawei"
+    assert contributions["by_org"][0]["name"] == "华为系"
+    assert contributions["by_repo"] == []
 
 
 def test_identity_merge_confirm_transitions_pending_to_confirmed(client, app):

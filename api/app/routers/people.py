@@ -20,6 +20,7 @@ from pydantic import BaseModel
 
 from app.core.response import CODE_OK, api_json
 from app.routers.deps import db_conn
+from app.services.contributions import full_metrics
 from app.services.people import (
     MERGE_CONFIRMED,
     MERGE_REJECTED,
@@ -150,14 +151,14 @@ def org_members(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/contributors/{contributor_id}", summary="人员画像（邮箱默认脱敏）")
+@router.get("/contributors/{contributor_id}", summary="人员画像（邮箱明文，脱敏形另立字段）")
 def contributor_detail(
     contributor_id: int,
     request: Request,
     conn: Annotated[Connection, Depends(db_conn)],
 ):
     row = conn.execute(
-        "SELECT contributor_id, gh_login, display_name, email_masked, company_raw,"
+        "SELECT contributor_id, gh_login, display_name, email_plain, email_masked, company_raw,"
         "       first_seen_at, last_seen_at"
         " FROM dim_contributor WHERE contributor_id = %s",
         (contributor_id,),
@@ -166,7 +167,7 @@ def contributor_detail(
         raise HTTPException(status_code=404, detail=f"contributor not found: {contributor_id}")
 
     orgs = conn.execute(
-        "SELECT o.org_id, o.name, o.kind, b.role, b.confidence, b.source"
+        "SELECT o.org_id, o.name, o.kind, o.key, b.role, b.confidence, b.source"
         " FROM bridge_contributor_org b"
         " JOIN dim_org o ON o.org_id = b.org_id"
         " WHERE b.contributor_id = %s AND b.valid_to IS NULL"
@@ -192,25 +193,109 @@ def contributor_detail(
     reviews = conn.execute(
         "SELECT COUNT(*)::int FROM fact_review WHERE reviewer_id = %s", (contributor_id,)
     ).fetchone()[0]
+    issues = conn.execute(
+        "SELECT COUNT(*)::int FROM fact_issue WHERE author_id = %s AND is_pull_request = false",
+        (contributor_id,),
+    ).fetchone()[0]
+    wiki = conn.execute(
+        "SELECT COUNT(*)::int FROM fact_wiki_revision WHERE author_id = %s", (contributor_id,)
+    ).fetchone()[0]
+    code = conn.execute(
+        "SELECT COALESCE(SUM(additions), 0)::int, COALESCE(SUM(deletions), 0)::int"
+        " FROM fact_contributor_code_weekly WHERE author_id = %s",
+        (contributor_id,),
+    ).fetchone()
+    code_additions, code_deletions = code[0], code[1]
 
-    email_masked = row[3]
+    metrics = {
+        "prs": prs,
+        "commits": commits,
+        "code_additions": code_additions,
+        "code_deletions": code_deletions,
+        "code_total": code_additions + code_deletions,
+        "issues": issues,
+        "wiki": wiki,
+    }
+
+    # by_repo：仓库维度的五口径拆分（合并五张事实表的 repo 集合，避免 commit 之外的口径漏仓）
+    repo_metrics: dict[int, dict[str, float]] = {}
+
+    def _inc_repo(rows, key: str) -> None:
+        for rid, val in rows:
+            slot = repo_metrics.setdefault(int(rid), {})
+            slot[key] = float(slot.get(key, 0.0)) + float(val)
+
+    _inc_repo(
+        conn.execute(
+            "SELECT repo_id, COUNT(*)::int FROM fact_commit WHERE author_id = %s"
+            " GROUP BY repo_id",
+            (contributor_id,),
+        ).fetchall(),
+        "commits",
+    )
+    _inc_repo(
+        conn.execute(
+            "SELECT repo_id, COUNT(*)::int FROM fact_pull_request WHERE author_id = %s"
+            " GROUP BY repo_id",
+            (contributor_id,),
+        ).fetchall(),
+        "prs",
+    )
+    _inc_repo(
+        conn.execute(
+            "SELECT repo_id, COUNT(*)::int FROM fact_issue"
+            " WHERE author_id = %s AND is_pull_request = false GROUP BY repo_id",
+            (contributor_id,),
+        ).fetchall(),
+        "issues",
+    )
+    _inc_repo(
+        conn.execute(
+            "SELECT repo_id, COUNT(*)::int FROM fact_wiki_revision WHERE author_id = %s"
+            " GROUP BY repo_id",
+            (contributor_id,),
+        ).fetchall(),
+        "wiki",
+    )
+    for rid, adds, dels in conn.execute(
+        "SELECT repo_id, SUM(additions)::int, SUM(deletions)::int"
+        " FROM fact_contributor_code_weekly WHERE author_id = %s GROUP BY repo_id",
+        (contributor_id,),
+    ).fetchall():
+        slot = repo_metrics.setdefault(int(rid), {})
+        slot["code_additions"] = float(adds)
+        slot["code_deletions"] = float(dels)
+
+    repo_by_id = {int(r[0]): f"{r[1]}/{r[2]}" for r in repos}
+    by_repo = [
+        {
+            "id": str(rid),
+            "full_name": repo_by_id.get(rid),
+            "metrics": full_metrics(m),
+        }
+        for rid, m in sorted(repo_metrics.items())
+    ]
+
+    email_plain = row[3]
+    email_masked = row[4]
     data = {
         "id": str(row[0]),
         "login": row[1],
         "display_name": row[2],
-        # 默认脱敏：优先输出落库时已脱敏的展示形；缺失时以占位符兜底，绝不回吐明文。
-        "email": email_masked if email_masked else None,
-        "company": row[4],
-        "first_seen_at": row[5].isoformat() if row[5] else None,
-        "last_seen_at": row[6].isoformat() if row[6] else None,
+        # 需求方 2026-09-22 拍板：email 返回明文（email_plain），脱敏形另立 email_masked。
+        "email": email_plain if email_plain else None,
+        "email_masked": email_masked,
+        "company": row[5],
+        "first_seen_at": row[6].isoformat() if row[6] else None,
+        "last_seen_at": row[7].isoformat() if row[7] else None,
         "orgs": [
             {
                 "org_id": str(o[0]),
                 "name": o[1],
                 "kind": o[2],
-                "role": o[3],
-                "confidence": float(o[4]),
-                "source": o[5],
+                "role": o[4],
+                "confidence": float(o[5]),
+                "source": o[6],
             }
             for o in orgs
         ],
@@ -219,6 +304,15 @@ def contributor_detail(
             "commits": commits,
             "prs": prs,
             "reviews": reviews,
+        },
+        # 一个人的全部贡献事实：五口径总量 + 按组织/按仓库拆分。
+        "contributions": {
+            "metrics": metrics,
+            "by_org": [
+                {"org_id": str(o[0]), "key": o[3], "name": o[1], "metrics": metrics}
+                for o in orgs
+            ],
+            "by_repo": by_repo,
         },
     }
     return api_json(data, code=CODE_OK, message="ok", request_id=_rid(request))

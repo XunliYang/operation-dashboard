@@ -16,7 +16,7 @@ SQL 口径（与表一一对应，改动须与 `services/contributions.py` 的 d
   prs      fact_pull_request JOIN dim_contributor ON author_id，窗口筛 created_at
   issues   fact_issue WHERE is_pull_request=false，窗口筛 created_at（必须排除 PR）
   code     fact_contributor_code_weekly，窗口筛 week_start（DATE，闭区间），SUM(additions)/SUM(deletions)
-  wiki     fact_wiki_revision，窗口筛 committed_at（author_id IS NULL 的行不进个人排名）
+  wiki     fact_wiki_revision，窗口筛 committed_at；author_id IS NULL 的行不进个人排名，单独计数并入 summary 的 totals.metric_value（只计总量）
   org_key  bridge_contributor_org（valid_to IS NULL）+ dim_org.key，缺行 → _unclassified
   email    dim_contributor.email_plain（明文，需求方 2026-09-22 决策）
   email_masked dim_contributor.email_masked（脱敏形，保留）
@@ -126,9 +126,9 @@ def _load_rows(
     org_key: str | None,
     frm: date | None,
     to: date | None,
-) -> list[ContributionRow]:
+) -> tuple[list[ContributionRow], int]:
     if not repo_ids:
-        return []
+        return [], 0
 
     start_dt = datetime(frm.year, frm.month, frm.day, tzinfo=UTC) if frm else None
     end_dt = datetime(to.year, to.month, to.day, 23, 59, 59, tzinfo=UTC) if to else None
@@ -253,6 +253,22 @@ def _load_rows(
         "wiki",
     )
 
+    # 无归属（author_id IS NULL）wiki 修订：只计入口径总量、不进个人排名（LEOY-48 契约）。
+    wiki_row = (
+        conn.execute(
+            "SELECT COUNT(*)::int FROM fact_wiki_revision"
+            " WHERE author_id IS NULL AND repo_id = ANY(%s)"
+            + (" AND committed_at > %s" if start_dt else "")
+            + (" AND committed_at <= %s" if end_dt else ""),
+            tuple(
+                p
+                for p in (repo_ids, start_dt, end_dt)
+                if p is not None
+            ),
+        ).fetchone()
+    )
+    unattributed_wiki = int(wiki_row[0]) if wiki_row else 0
+
     rows: list[ContributionRow] = []
     for (cid, rid), metrics in slots.items():
         m = meta[cid]
@@ -276,7 +292,7 @@ def _load_rows(
                 repo_full_name=repo.get("full_name"),
             )
         )
-    return rows
+    return rows, unattributed_wiki
 
 
 def _repo_map(conn: Connection, repo_ids: list[int]) -> dict[int, dict]:
@@ -323,7 +339,7 @@ def contributions_summary(
 
     settings = get_settings()
     repo_ids, catalog = _scope(conn, settings.config_dir, repo_ref)
-    rows = _load_rows(
+    rows, unattributed_wiki = _load_rows(
         conn,
         repo_ids=repo_ids,
         repo_map=_repo_map(conn, repo_ids),
@@ -339,6 +355,7 @@ def contributions_summary(
                 "to": to_d.isoformat() if to_d else None},
         filters={"org": org, "repo": repo},
         repo_catalog=catalog,
+        unattributed_wiki=unattributed_wiki,
     )
     return api_json(data, code=CODE_OK, message="ok", request_id=_rid(request))
 
@@ -393,7 +410,7 @@ def contributions_leaderboard(
 
     settings = get_settings()
     repo_ids, _catalog = _scope(conn, settings.config_dir, repo_ref)
-    rows = _load_rows(
+    rows, _unattributed_wiki = _load_rows(
         conn,
         repo_ids=repo_ids,
         repo_map=_repo_map(conn, repo_ids),

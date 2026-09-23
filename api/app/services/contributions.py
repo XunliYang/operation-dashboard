@@ -10,9 +10,10 @@
   改口径会静默改变已有健康分）。
 - `code = code_additions + code_deletions`：`fact_contributor_code_weekly` 的两列之和。
 - `issues` 只计 `is_pull_request = false`（PR 是另一口径）。
-- `wiki`：`fact_wiki_revision.author_id IS NULL` 的修订（S1 无邮箱匹配）只计入
-  口径总量、不计入任何个人排名——本模块只按 `contributor_id` 聚合，天然满足这一点；
-  下游不得把榜单里的 `wiki` 读成「该贡献者的全部 wiki 修订」。
+- `wiki`：`fact_wiki_revision.author_id IS NULL` 的修订（S1 无邮箱匹配）不计入任何
+  个人排名——本模块只按 `contributor_id` 聚合，天然做到这一点；其总量由 router 单独
+  计数，并在 `metric=wiki` 时通过 `summarize(unattributed_wiki=...)` 并入
+  `totals.metric_value`。下游不得把榜单里的 `wiki` 读成「该贡献者的全部 wiki 修订」。
 
 排序决定性：`metric_value` 降序 → `commits` 降序 → `contributor_id` 升序。三键全序，
 保证任意次调用结果一致（可复现是既有约定，见 `config/health_weights.yaml:1-10`）。
@@ -318,14 +319,22 @@ def summarize(
     range_: dict,
     filters: dict,
     repo_catalog: list[dict] | None = None,
+    unattributed_wiki: int = 0,
 ) -> dict:
-    """贡献度汇总响应体（不含统一信封）。"""
+    """贡献度汇总响应体（不含统一信封）。
+
+    `unattributed_wiki`：`fact_wiki_revision` 中 `author_id IS NULL` 的修订数，由
+    router 单独统计；仅当 `metric == "wiki"` 时并入 `totals.metric_value`（只计总量、
+    不进任何分组与个人排名，见 LEOY-48 口径契约）。
+    """
     groups = build_groups(
         rows, group_by=group_by, metric=metric, repo_catalog=repo_catalog
     )
     active = _active(rows)
     contributors = {r.contributor_id for r in active}
     total_value = sum(metric_value(r.metrics, metric) for r in active)
+    if metric == "wiki":
+        total_value += unattributed_wiki
     return {
         "group_by": group_by,
         "metric": metric,

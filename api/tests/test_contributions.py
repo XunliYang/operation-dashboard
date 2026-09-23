@@ -165,6 +165,32 @@ def test_summarize_shape_and_totals():
     assert data["totals"]["group_count"] == 2
 
 
+def test_summarize_wiki_totals_include_unattributed_only_for_wiki():
+    rows = [
+        _row(1, org_key="huawei", metrics={"wiki": 3, "commits": 2}),
+        _row(2, org_key="huawei", metrics={"wiki": 1, "commits": 1}),
+    ]
+    wiki = summarize(
+        rows,
+        group_by="org",
+        metric="wiki",
+        range_={"from": None, "to": None},
+        filters={},
+        unattributed_wiki=7,
+    )
+    assert wiki["totals"]["metric_value"] == 3 + 1 + 7
+    # 其它口径不受无归属 wiki 影响
+    commits = summarize(
+        rows,
+        group_by="org",
+        metric="commits",
+        range_={"from": None, "to": None},
+        filters={},
+        unattributed_wiki=7,
+    )
+    assert commits["totals"]["metric_value"] == 3
+
+
 def test_build_leaderboard_repos_avatar_and_rank():
     rows = [
         _row(
@@ -296,7 +322,8 @@ def test_summary_happy_path(client, app):
     fake.set("FROM fact_pull_request WHERE author_id IS NOT NULL", [(10, 165, 2)])
     fake.set("FROM fact_issue WHERE author_id IS NOT NULL", [(10, 165, 1)])
     fake.set("FROM fact_contributor_code_weekly", [(10, 165, 100, 20)])
-    fake.set("FROM fact_wiki_revision", [])
+    fake.set("FROM fact_wiki_revision WHERE author_id IS NOT NULL", [])
+    fake.set("FROM fact_wiki_revision WHERE author_id IS NULL", [(0,)])
     _install(fake, app)
 
     resp = client.get(

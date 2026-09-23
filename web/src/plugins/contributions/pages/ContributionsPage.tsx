@@ -162,7 +162,8 @@ export function ContributionsPage() {
           <h2 className="text-base font-semibold" style={{ color: 'var(--c-text)' }}>
             {t('contributions.leaderboard.title')}
           </h2>
-          {leaderboard.data ? (
+          {/* wiki 口径全 0 时空态优先接管正文，头部计数一并隐藏，避免「N 贡献者 + 无内容」并存。 */}
+          {leaderboard.data && !wikiEmpty ? (
             <span className="text-xs" style={{ color: 'var(--c-text3)' }}>
               {leaderboard.data.total_contributors} {t('contributions.summary.contributors')}
             </span>

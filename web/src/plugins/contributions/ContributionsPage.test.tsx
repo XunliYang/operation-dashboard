@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -118,6 +118,19 @@ const LEADERBOARD: Leaderboard = {
   ],
 };
 
+// wiki 口径下后端仍返回 total_contributors 与非空 contributors（wiki 数值全 0），
+// 用于复现「头部计数与空态并存」的缺陷：头部计数应在空态时一并隐藏。
+const WIKI_LEADERBOARD: Leaderboard = {
+  ...LEADERBOARD,
+  metric: 'wiki',
+  total_contributors: 14,
+  contributors: LEADERBOARD.contributors.map((c) => ({
+    ...c,
+    metric_value: 0,
+    metrics: metrics({ prs: 0, commits: 0, code_total: 0, issues: 0, wiki: 0 }),
+  })),
+};
+
 const DETAIL: ContributorDetail = {
   id: '1',
   login: 'ivo.zhou',
@@ -221,19 +234,39 @@ describe('ContributionsPage', () => {
     expect((await screen.findAllByText('ivo.zhou@huawei.com')).length).toBeGreaterThan(0);
   });
 
-  it('wiki 口径全 0 时显示明确空态文案', async () => {
+  it('wiki 口径全 0 时显示明确空态文案，且榜单头部不显示贡献者计数', async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
+      if (url.includes('/contributions/leaderboard')) {
+        return url.includes('metric=wiki') ? envelope(WIKI_LEADERBOARD) : envelope(LEADERBOARD);
+      }
       if (url.includes('metric=wiki')) return envelope(WIKI_SUMMARY);
       return envelope(SUMMARY);
     }) as typeof fetch;
 
-    renderPage();
+    render(
+      <QueryClientProvider client={qc}>
+        <MemoryRouter initialEntries={['/contributions']}>
+          <ContributionsPage />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
     await screen.findByText('贡献度汇总');
 
+    // 先等组织下拉就绪（否则受控 select 尚无该 option，change 不会生效），
+    // 再选组织 scope 使榜单启用，最后切 wiki 口径触发空态（复现 issue 场景：org + wiki）。
+    await screen.findByRole('option', { name: '华为系' });
+    fireEvent.change(screen.getByLabelText('选择组织'), { target: { value: 'huawei' } });
     fireEvent.change(screen.getByLabelText('口径'), { target: { value: 'wiki' } });
 
-    expect(await screen.findByText('当前无 wiki 内容')).toBeInTheDocument();
+    expect((await screen.findAllByText('当前无 wiki 内容')).length).toBeGreaterThan(0);
+
+    // 等所有查询（含 wiki 榜单）结算后，再断言头部计数：空态下「14 贡献者」应随计数一并隐藏。
+    await waitFor(() => {
+      expect(qc.isFetching()).toBe(0);
+    });
+    expect(screen.queryByText('14 贡献者')).not.toBeInTheDocument();
   });
 
   it('组织维度选中 scope 后，下拉仍列出全部组织（P1 回归）', async () => {

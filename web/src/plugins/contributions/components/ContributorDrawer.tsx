@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { useEffect } from 'react';
 
 import { EmptyState } from '@/components/ui/EmptyState';
 import { githubAvatar, githubProfile } from '@/core/api/github';
@@ -20,6 +21,16 @@ export function ContributorDrawer({ contributorId, onClose }: ContributorDrawerP
     queryFn: () => contributionsApi.contributor(contributorId as string),
     enabled: contributorId !== null,
   });
+
+  // Esc 关闭抽屉（键盘可达性，见 PR 复审 P2-6）。
+  useEffect(() => {
+    if (contributorId === null) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [contributorId, onClose]);
 
   if (contributorId === null) {
     return null;
@@ -69,23 +80,31 @@ export function ContributorDrawer({ contributorId, onClose }: ContributorDrawerP
 
 function DrawerBody({ data }: { data: ContributorDetail }) {
   const { t } = useI18n();
-  const login = data.login ?? `#${data.id}`;
+  const login = data.login;
   const c = data.contributions;
 
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-3">
-        <img src={githubAvatar(login)} alt="" className="h-12 w-12 rounded-full" />
+        {login ? (
+          <img src={githubAvatar(login)} alt="" className="h-12 w-12 rounded-full" />
+        ) : null}
         <div className="min-w-0">
-          <a
-            href={githubProfile(login)}
-            target="_blank"
-            rel="noreferrer"
-            className="font-medium"
-            style={{ color: 'var(--c-primary)' }}
-          >
-            @{login}
-          </a>
+          {login ? (
+            <a
+              href={githubProfile(login)}
+              target="_blank"
+              rel="noreferrer"
+              className="font-medium"
+              style={{ color: 'var(--c-primary)' }}
+            >
+              @{login}
+            </a>
+          ) : (
+            <span className="font-medium" style={{ color: 'var(--c-text)' }}>
+              #{data.id}
+            </span>
+          )}
           {data.display_name ? (
             <p className="text-sm" style={{ color: 'var(--c-text3)' }}>
               {data.display_name}
@@ -134,7 +153,8 @@ function DrawerBody({ data }: { data: ContributorDetail }) {
                   {o.name}
                 </span>
                 <span className="ml-2 tabular-nums" style={{ color: 'var(--c-text2)' }}>
-                  {formatNumber(o.metrics.commits)} commits · {formatNumber(o.metrics.code_total)} code
+                  {formatNumber(o.metrics.commits)} {t('contributions.metric.commits')} ·{' '}
+                  {formatNumber(o.metrics.code_total)} {t('contributions.metric.code')}
                 </span>
               </li>
             ))}
@@ -155,7 +175,7 @@ function DrawerBody({ data }: { data: ContributorDetail }) {
               >
                 <span style={{ color: 'var(--c-text)' }}>{r.full_name ?? r.id}</span>
                 <span className="tabular-nums" style={{ color: 'var(--c-text2)' }}>
-                  {formatNumber(r.metrics.commits)} commits
+                  {formatNumber(r.metrics.commits)} {t('contributions.metric.commits')}
                 </span>
               </li>
             ))}

@@ -235,4 +235,59 @@ describe('ContributionsPage', () => {
 
     expect(await screen.findByText('当前无 wiki 内容')).toBeInTheDocument();
   });
+
+  it('组织维度选中 scope 后，下拉仍列出全部组织（P1 回归）', async () => {
+    const filteredSummary: ContributionsSummary = { ...SUMMARY, groups: [SUMMARY.groups[0]] };
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/contributions/leaderboard')) return envelope(LEADERBOARD);
+      if (url.includes('org=huawei')) return envelope(filteredSummary);
+      return envelope(SUMMARY);
+    }) as typeof fetch;
+
+    renderPage();
+    await screen.findByText('贡献度汇总');
+
+    // 选中 huawei → summary filtered 只剩华为系，但 scope 下拉应仍来自独立 orgList
+    fireEvent.change(screen.getByLabelText('选择组织'), { target: { value: 'huawei' } });
+
+    expect(await screen.findByRole('option', { name: '中兴' })).toBeInTheDocument();
+  });
+
+  it('login 为 null 的榜单行不渲染坏头像/坏外链（P2-3 回归）', async () => {
+    const nullLoginBoard: Leaderboard = {
+      ...LEADERBOARD,
+      contributors: [
+        {
+          rank: 1,
+          contributor_id: '99',
+          login: null,
+          display_name: null,
+          avatar_url: null,
+          email: null,
+          email_masked: null,
+          org: { key: '_unclassified', display: '待归类', source: 'inferred', confidence: null },
+          metrics: metrics({ commits: 3 }),
+          metric_value: 3,
+          first_seen_at: null,
+          last_seen_at: null,
+          repos: [],
+        },
+      ],
+    };
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/contributions/leaderboard')) return envelope(nullLoginBoard);
+      return envelope(SUMMARY);
+    }) as typeof fetch;
+
+    renderPage();
+    await screen.findByText('贡献度汇总');
+    fireEvent.click(screen.getByRole('button', { name: '整个项目' }));
+
+    // 无 login：显示纯文本 #99，不渲染坏外链（href 含 #99）
+    expect(await screen.findByText('#99')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '#99' })).not.toBeInTheDocument();
+    expect(document.querySelector('a[href*="#99"]')).not.toBeInTheDocument();
+  });
 });

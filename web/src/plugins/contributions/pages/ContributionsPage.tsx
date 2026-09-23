@@ -86,11 +86,19 @@ export function ContributionsPage() {
     enabled: filter.dimension === 'repo',
   });
 
-  // 组织下拉选项：来自 summary group_by=org 的分组（org 维度时 summary 即按 org 分组）。
+  // 组织下拉选项：专供 scope 下拉的独立列表源，不带 org 过滤。
+  // summary 本身在 scope 非空时会带 org= 过滤（后端先按成员裁剪再分组），
+  // 若直接取 summary.groups，选中某组织后选项会坍缩成只剩当前组织，无法直接切换（PR 复审 P1）。
+  const orgList = useQuery({
+    queryKey: queryKeys.contributionsSummary('org', 'commits', null, null, ''),
+    queryFn: () => contributionsApi.summary({ groupBy: 'org', metric: 'commits' }),
+    enabled: filter.dimension !== 'repo',
+  });
+
   const orgOptions: OrgOption[] =
     filter.dimension === 'repo'
       ? []
-      : (summary.data?.groups ?? [])
+      : (orgList.data?.groups ?? [])
           .filter((g) => g.kind === 'org')
           .map((g) => ({ key: g.key, name: g.name }));
 

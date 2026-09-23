@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { PageHeader } from '@/components/ui/PageHeader';
-import { CONTRIBUTION_METRIC_KEYS, contributionsApi, formatNumber } from '@/core/api/contributions';
+import { CONTRIBUTION_METRIC_KEYS, contributionsApi, formatNumber, recentWindow } from '@/core/api/contributions';
 import { queryKeys } from '@/core/api/queryKeys';
 import { reposApi } from '@/core/api/repos';
 import { useI18n } from '@/core/i18n';
@@ -131,16 +131,34 @@ export function RepoDetailPage() {
 function ContributionCard({ repoId }: { repoId: string }) {
   const { t } = useI18n();
 
+  // 与看板默认口径一致：最近 90 天（避免卡片显示全量、跳转后变 90 天的口径不一致，PR 复审 P2-7）。
+  const window90 = recentWindow(90);
+  const rangeKey = `${window90.from}|${window90.to}`;
+
   const summary = useQuery({
-    queryKey: queryKeys.contributionsSummary('repo', 'commits', null, repoId, ''),
-    queryFn: () => contributionsApi.summary({ groupBy: 'repo', metric: 'commits', repo: repoId }),
+    queryKey: queryKeys.contributionsSummary('repo', 'commits', null, repoId, rangeKey),
+    queryFn: () =>
+      contributionsApi.summary({
+        groupBy: 'repo',
+        metric: 'commits',
+        repo: repoId,
+        from: window90.from,
+        to: window90.to,
+      }),
     enabled: repoId !== '',
   });
 
   const top = useQuery({
-    queryKey: queryKeys.contributionsLeaderboard('repo', repoId, 'commits', ''),
+    queryKey: queryKeys.contributionsLeaderboard('repo', repoId, 'commits', rangeKey),
     queryFn: () =>
-      contributionsApi.leaderboard({ dimension: 'repo', scope: repoId, metric: 'commits', limit: 5 }),
+      contributionsApi.leaderboard({
+        dimension: 'repo',
+        scope: repoId,
+        metric: 'commits',
+        limit: 5,
+        from: window90.from,
+        to: window90.to,
+      }),
     enabled: repoId !== '',
   });
 
@@ -148,13 +166,13 @@ function ContributionCard({ repoId }: { repoId: string }) {
   const topContributors = top.data?.contributors ?? [];
 
   return (
-    <Card title={t('contributions.repoCard.title')} className="lg:col-span-2">
+    <Card title={t('repos.contribCard.title')} className="lg:col-span-2">
       {group ? (
         <div className="grid gap-4 md:grid-cols-2">
           <div className="grid grid-cols-5 gap-2">
             {CONTRIBUTION_METRIC_KEYS.map((m) => (
               <div key={m} className="rounded-md bg-slate-50 p-2 text-center">
-                <p className="text-xs text-slate-500">{t(`contributions.metric.${m}`)}</p>
+                <p className="text-xs text-slate-500">{t(`repos.contribMetric.${m}`)}</p>
                 <p className="mt-1 text-lg font-semibold tabular-nums text-slate-900">
                   {formatNumber(m === 'code' ? group.metrics.code_total : group.metrics[m])}
                 </p>
@@ -164,7 +182,7 @@ function ContributionCard({ repoId }: { repoId: string }) {
 
           <div>
             <p className="text-xs font-medium text-slate-500">
-              {t('contributions.repoCard.top')}
+              {t('repos.contribCard.top')}
             </p>
             <ul className="mt-2 space-y-1">
               {topContributors.map((c) => (
@@ -189,7 +207,7 @@ function ContributionCard({ repoId }: { repoId: string }) {
               to={`/contributions?repo=${repoId}`}
               className="mt-3 inline-block text-sm font-medium text-brand-700 hover:underline"
             >
-              {t('contributions.repoCard.viewAll')}
+              {t('repos.contribCard.viewAll')}
             </Link>
           </div>
         </div>

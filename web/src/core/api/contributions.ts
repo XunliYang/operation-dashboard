@@ -44,6 +44,21 @@ export function formatNumber(n: number): string {
   return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
 
+export function toISODate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/** 计算「最近 N 天」窗口的 from/to（含今天，后端 to 记到当日 23:59:59）。 */
+export function recentWindow(days: number): { from: string; to: string } {
+  const now = new Date();
+  const from = new Date(now);
+  from.setDate(from.getDate() - days);
+  return { from: toISODate(from), to: toISODate(now) };
+}
+
 /** 与 `core/api/repos.ts` 的 qs 同法：过滤 undefined / 空串。 */
 function qs(params: Record<string, string | number | undefined>): string {
   const search = new URLSearchParams();

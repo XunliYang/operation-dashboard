@@ -1,6 +1,6 @@
 import { useI18n } from '@/core/i18n';
 
-import { githubAvatar, githubProfile } from '@/core/api/github';
+import { githubProfile } from '@/core/api/github';
 
 import { METRIC_KEYS, formatNumber, type ContributionMetricKey, type RankedContributor } from '@/plugins/contributions/api';
 
@@ -51,13 +51,21 @@ export function Leaderboard({ contributors, metric, onSelect }: LeaderboardProps
         </thead>
         <tbody>
           {contributors.map((c) => {
-            const login = c.login ?? `#${c.contributor_id}`;
             const active = METRIC_KEYS.indexOf(metric);
             return (
               <tr
                 key={c.contributor_id}
+                tabIndex={0}
+                role="button"
+                aria-label={`${c.rank} ${c.login ?? `#${c.contributor_id}`}`}
                 onClick={() => onSelect(c.contributor_id)}
-                className="cursor-pointer"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onSelect(c.contributor_id);
+                  }
+                }}
+                className="cursor-pointer focus:outline-none"
                 style={{ borderBottom: '1px solid var(--c-border2)' }}
               >
                 <td className="px-3 py-2 tabular-nums" style={{ color: 'var(--c-text3)' }}>
@@ -65,22 +73,30 @@ export function Leaderboard({ contributors, metric, onSelect }: LeaderboardProps
                 </td>
                 <td className="px-3 py-2">
                   <div className="flex items-center gap-2">
-                    <img
-                      src={githubAvatar(login)}
-                      alt=""
-                      className="h-6 w-6 shrink-0 rounded-full"
-                      loading="lazy"
-                    />
-                    <a
-                      href={githubProfile(login)}
-                      target="_blank"
-                      rel="noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      className="truncate font-medium"
-                      style={{ color: 'var(--c-primary)' }}
-                    >
-                      @{login}
-                    </a>
+                    {c.avatar_url ? (
+                      <img
+                        src={c.avatar_url}
+                        alt=""
+                        className="h-6 w-6 shrink-0 rounded-full"
+                        loading="lazy"
+                      />
+                    ) : null}
+                    {c.login ? (
+                      <a
+                        href={githubProfile(c.login)}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="truncate font-medium"
+                        style={{ color: 'var(--c-primary)' }}
+                      >
+                        @{c.login}
+                      </a>
+                    ) : (
+                      <span className="truncate font-medium" style={{ color: 'var(--c-text2)' }}>
+                        #{c.contributor_id}
+                      </span>
+                    )}
                   </div>
                 </td>
                 <td className="px-3 py-2" style={{ color: 'var(--c-text2)' }}>

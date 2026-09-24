@@ -38,10 +38,32 @@ def _fetch_contributor_stats(client, owner: str, name: str) -> list[dict] | None
     return data
 
 
+def _last_active_week(weeks: list[dict]) -> datetime | None:
+    """该作者存在提交（`c > 0`）的最大周时间戳；无任何活跃周时返回 None。
+
+    `seen_at` 的唯一合法来源是真实活动时间——`/stats/contributors` 返回的 weeks
+    里那些确实有提交的周。全部周 `c == 0` 表示「只出现过、从未有可计入的提交」，
+    不能当作活动证据，返回 None 由调用方决定不推进 `last_seen_at`。
+    """
+    active = [
+        datetime.fromtimestamp(int(w["w"]), tz=UTC)
+        for w in weeks
+        if w.get("w") is not None and int(w.get("c") or 0) > 0
+    ]
+    return max(active) if active else None
+
+
 def collect_code_stats(client, conn, *, repo_id: int, owner: str, name: str) -> int:
     """把每个作者的 weekly a/d/c 桶写入 `fact_contributor_code_weekly`。
 
     返回写入的周桶数。未就绪时返回 0 且不写任何行（旧数据保留），不抛异常。
+
+    活动证据约束（LEOY-70）：本 job 只读展示代码量，**不构成活动证据**，因此
+    upsert 贡献者时 `seen_at` 只能来自该作者「存在提交（c>0）的最大周」，
+    **绝不能用 `now()` 兜底**——`/stats/contributors` 返回历史全量作者（含早已
+    停更的人），用 `now()` 会把休眠贡献者反复刷成「今天活跃」，污染
+    `dim_contributor.last_seen_at`。作者没有任何活跃周（全部 `c == 0`）时跳过
+    upsert（`author_id` 落 NULL，该列本就允许为空），不得推进 `last_seen_at`。
     """
     payload = _fetch_contributor_stats(client, owner, name)
     if payload is None:
@@ -57,9 +79,15 @@ def collect_code_stats(client, conn, *, repo_id: int, owner: str, name: str) -> 
         if not login:
             continue
         gh_id = author.get("id")
-        author_id = db.upsert_contributor(
-            conn, gh_login=login, gh_id=gh_id, display_name=login, seen_at=datetime.now(UTC)
-        )
+        seen_at = _last_active_week(item.get("weeks") or [])
+        if seen_at is None:
+            # 全部周 c==0：没有任何活跃周。不得推进 last_seen_at，也不得用 now()
+            # 兜底创建/刷新贡献者；author_id 落 NULL（该列允许为空）。
+            author_id = None
+        else:
+            author_id = db.upsert_contributor(
+                conn, gh_login=login, gh_id=gh_id, display_name=login, seen_at=seen_at
+            )
         for w in item.get("weeks") or []:
             ts = w.get("w")
             if ts is None:

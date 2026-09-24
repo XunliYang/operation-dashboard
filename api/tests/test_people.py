@@ -93,6 +93,19 @@ def test_classify_tiers_assigns_core_top20_and_activity_bands():
     assert sum(1 for t in tiers.values() if t == TIER_CORE) == 2
 
 
+def test_zero_contribution_inactive_over_90_days_is_churned():
+    # LEOY-70 的错位类型：0 贡献且 >90 天未活动必须是「流失」，
+    # 不能因 last_seen_at 污染（被判成 0 天）落进「活跃」。
+    tiers = classify_tiers(
+        [
+            MemberActivity(id=1, contributions=100, days_since_active=2),  # core
+            MemberActivity(id=2, contributions=0, days_since_active=120),  # churned
+        ]
+    )
+    assert tiers[1] == TIER_CORE
+    assert tiers[2] == TIER_CHURNED
+
+
 def test_maintainer_alerts_flags_core_member_inactive_over_30_days():
     alerts = maintainer_alerts(_members())
     alerted_ids = {a["id"] for a in alerts}

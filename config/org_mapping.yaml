@@ -42,8 +42,8 @@ orgs:
 
   # ---- 邮箱域名推断的外部组织（email_domain 来源，confidence ≈0.6）----
   # 实测 OpenAN 全部提交邮箱的域名集合与归属见 LEOY-47 需求表。
-  # 需求方 2026-09-22 拍板：h-partners.com 并入 huawei 成「华为」，不再有
-  # huawei-partner 组织键。
+  # 需求方 2026-09-22 拍板：h-partners.com 并入 huawei，不再有 huawei-partner 组织键。
+  # 需求方 2026-09-23 拍板：展示名由「华为系」改为「华为」（归并关系不变）。
   huawei:
     display: 华为
     email_domains:

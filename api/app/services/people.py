@@ -10,6 +10,8 @@ import math
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
+from app.services.org_classifier import UNCLASSIFIED_KEY
+
 # ---------------------------------------------------------------------------
 # 身份归并状态机
 # ---------------------------------------------------------------------------
@@ -146,6 +148,7 @@ class OrgRow:
     kind: str
     source: str | None
     parent_id: int | None
+    key: str | None = None
 
 
 @dataclass(frozen=True)
@@ -178,7 +181,8 @@ def build_org_board(
     """把组织树 + 成员 + 已确认归并折叠成看板 B 的响应体（不含信封）。
 
     - 已确认的身份归并：merged 身份并入 canonical，贡献合并、身份属性以 canonical 为准；
-    - 未归入任何 bridge 的成员进入「待归类」；
+    - 「待归类」= 显式 `_unclassified` 组（source='inferred', confidence=0）的成员，
+      外加任何无有效桥表行的成员；`_unclassified` 是伪组织桶，不进组织树；
     - 贡献占比按组织内（含团队）贡献量归一化；趋势（trend）由调用方基于时序另算，
       这里只返回当期快照字段。
     """
@@ -296,11 +300,16 @@ def build_org_board(
             "teams": [_node(child) for child in children],
         }
 
-    root_orgs = [o for o in orgs if o.parent_id is None]
+    # 「待归类」口径与工作台（workbench.unclassified_people）一致：显式 `_unclassified`
+    # 组（source='inferred', confidence=0）的人数，而不是「无任何有效桥表行」的人数。
+    # `_unclassified` 是伪组织桶，不进组织树，其成员单独进入 `unclassified` 列表。
+    unclassified_org_ids = {o.org_id for o in orgs if o.key == UNCLASSIFIED_KEY}
+    real_orgs = [o for o in orgs if o.org_id not in unclassified_org_ids]
+    root_orgs = [o for o in real_orgs if o.parent_id is None]
     unclassified = [
         member_views[slot["contributor_id"]]
         for slot in folded.values()
-        if slot["org_id"] is None
+        if slot["org_id"] is None or slot["org_id"] in unclassified_org_ids
     ]
 
     tier_counts = {tier: sum(1 for t in tiers.values() if t == tier) for tier in TIERS}

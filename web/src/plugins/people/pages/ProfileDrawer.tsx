@@ -105,7 +105,8 @@ function ProfileBody({ profile }: { profile: ContributorProfile }) {
               <li key={o.org_id} className="text-sm" style={{ color: 'var(--c-text2)' }}>
                 {o.name}
                 <span className="ml-2 text-xs" style={{ color: 'var(--c-text3)' }}>
-                  {o.source} · conf {o.confidence.toFixed(2)}
+                  {t('people.member.source')} {o.source} · {t('people.member.confidence')}{' '}
+                  {o.confidence.toFixed(2)}
                 </span>
               </li>
             ))}

@@ -6,8 +6,8 @@
   GET  /dashboard/contributors/{id}        人员画像（邮箱默认脱敏）
   POST /admin/identity-merge               身份归并确认 / 拒绝
 
-响应统一走 `{code,message,data,request_id}`。邮箱只读 `dim_contributor.email_masked`，
-绝不回吐明文（明文在本系统中本就不落库）。
+响应统一走 `{code,message,data,request_id}`。成员看板与画像的 `email` 字段回吐
+`dim_contributor.email_plain` 明文，脱敏形另立 `email_masked`。
 """
 
 from __future__ import annotations
@@ -51,7 +51,7 @@ def _load_board(conn: Connection) -> dict:
     ]
 
     raw_members = conn.execute(
-        "SELECT c.contributor_id, c.gh_login, c.email_masked, c.last_seen_at,"
+        "SELECT c.contributor_id, c.gh_login, c.email_masked, c.email_plain, c.last_seen_at,"
         "       b.org_id, b.role, b.confidence, b.source"
         " FROM dim_contributor c"
         " LEFT JOIN bridge_contributor_org b"
@@ -89,11 +89,12 @@ def _load_board(conn: Connection) -> dict:
                 contributor_id=cid,
                 login=r[1],
                 email_masked=r[2],
-                last_seen_at=r[3],
-                org_id=r[4],
-                role=r[5],
-                confidence=float(r[6]) if r[6] is not None else None,
-                source=r[7],
+                email=r[3],
+                last_seen_at=r[4],
+                org_id=r[5],
+                role=r[6],
+                confidence=float(r[7]) if r[7] is not None else None,
+                source=r[8],
                 contributions=int(commits.get(cid, 0) + prs.get(cid, 0) + reviews.get(cid, 0)),
             )
         )

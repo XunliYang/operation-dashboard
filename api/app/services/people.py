@@ -153,6 +153,7 @@ class MemberRow:
     contributor_id: int
     login: str | None
     email_masked: str | None
+    email: str | None
     last_seen_at: datetime | None
     org_id: int | None
     role: str | None
@@ -197,6 +198,7 @@ def build_org_board(
                 "contributor_id": eff,
                 "login": None,
                 "email_masked": None,
+                "email": None,
                 "last_seen_at": None,
                 "org_id": None,
                 "role": None,
@@ -208,6 +210,7 @@ def build_org_board(
         if m.contributor_id == eff:
             slot["login"] = m.login
             slot["email_masked"] = m.email_masked
+            slot["email"] = m.email
             slot["org_id"] = m.org_id
             slot["role"] = m.role
             slot["confidence"] = m.confidence
@@ -241,6 +244,7 @@ def build_org_board(
             "id": str(cid),
             "login": slot["login"],
             "email_masked": slot["email_masked"],
+            "email": slot["email"],
             "org_id": str(slot["org_id"]) if slot["org_id"] is not None else None,
             "role": slot["role"],
             "confidence": slot["confidence"],

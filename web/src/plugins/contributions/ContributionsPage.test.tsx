@@ -41,7 +41,7 @@ const SUMMARY: ContributionsSummary = {
     {
       key: 'huawei',
       kind: 'org',
-      name: '华为系',
+      name: '华为',
       full_name: null,
       contributor_count: 2,
       metric_value: 165,
@@ -69,7 +69,7 @@ const WIKI_SUMMARY: ContributionsSummary = {
     {
       key: 'huawei',
       kind: 'org',
-      name: '华为系',
+      name: '华为',
       full_name: null,
       contributor_count: 2,
       metric_value: 0,
@@ -93,7 +93,7 @@ const LEADERBOARD: Leaderboard = {
       avatar_url: 'https://github.com/ivo.zhou.png',
       email: 'ivo.zhou@huawei.com',
       email_masked: 'i***@huawei.com',
-      org: { key: 'huawei', display: '华为系', source: 'manual_yaml', confidence: 1.0 },
+      org: { key: 'huawei', display: '华为', source: 'manual_yaml', confidence: 1.0 },
       metrics: metrics({ commits: 165 }),
       metric_value: 165,
       first_seen_at: null,
@@ -140,13 +140,13 @@ const DETAIL: ContributorDetail = {
   company: 'Huawei',
   first_seen_at: '2026-01-01T00:00:00Z',
   last_seen_at: '2026-09-19T00:00:00Z',
-  orgs: [{ org_id: '1', name: '华为系', kind: 'org', role: 'maintainer', confidence: 1.0, source: 'manual_yaml' }],
+  orgs: [{ org_id: '1', name: '华为', kind: 'org', role: 'maintainer', confidence: 1.0, source: 'manual_yaml' }],
   repos: [{ id: '165', full_name: 'project-openan/registry-center' }],
   activity: { commits: 165, prs: 1, reviews: 0 },
   contributions: {
     metrics: metrics(),
     by_org: [
-      { org_id: '1', key: 'huawei', name: '华为系', metrics: metrics() },
+      { org_id: '1', key: 'huawei', name: '华为', metrics: metrics() },
     ],
     by_repo: [
       { id: '165', full_name: 'project-openan/registry-center', metrics: metrics() },
@@ -190,7 +190,7 @@ describe('ContributionsPage', () => {
 
     renderPage();
 
-    expect((await screen.findAllByText('华为系')).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText('华为')).length).toBeGreaterThan(0);
     expect(screen.getAllByText('中兴').length).toBeGreaterThan(0);
     expect(screen.queryByText('huawei-partner')).not.toBeInTheDocument();
   });
@@ -210,7 +210,7 @@ describe('ContributionsPage', () => {
     expect(await screen.findByText('@ivo.zhou')).toBeInTheDocument();
     expect(screen.getByText('ivo.zhou@huawei.com')).toBeInTheDocument();
     // 组织标签 + 主口径数值（165 提交）可见
-    expect(screen.getAllByText('华为系').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('华为').length).toBeGreaterThan(0);
     expect(screen.getAllByText('165').length).toBeGreaterThan(0);
   });
 
@@ -256,7 +256,7 @@ describe('ContributionsPage', () => {
 
     // 先等组织下拉就绪（否则受控 select 尚无该 option，change 不会生效），
     // 再选组织 scope 使榜单启用，最后切 wiki 口径触发空态（复现 issue 场景：org + wiki）。
-    await screen.findByRole('option', { name: '华为系' });
+    await screen.findByRole('option', { name: '华为' });
     fireEvent.change(screen.getByLabelText('选择组织'), { target: { value: 'huawei' } });
     fireEvent.change(screen.getByLabelText('口径'), { target: { value: 'wiki' } });
 
@@ -281,7 +281,7 @@ describe('ContributionsPage', () => {
     renderPage();
     await screen.findByText('贡献度汇总');
 
-    // 选中 huawei → summary filtered 只剩华为系，但 scope 下拉应仍来自独立 orgList
+    // 选中 huawei → summary filtered 只剩华为，但 scope 下拉应仍来自独立 orgList
     fireEvent.change(screen.getByLabelText('选择组织'), { target: { value: 'huawei' } });
 
     expect(await screen.findByRole('option', { name: '中兴' })).toBeInTheDocument();

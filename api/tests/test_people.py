@@ -253,7 +253,7 @@ def test_contributor_detail_plaintext_email_and_contributions(client, app):
     )
     fake.set(
         "FROM bridge_contributor_org b",
-        [(3, "华为系", "org", "huawei", None, 0.6, "email_domain")],
+        [(3, "华为", "org", "huawei", None, 0.6, "email_domain")],
     )
     fake.set("FROM fact_commit fc JOIN dim_repo", [(165, "project-openan", "registry-center")])
     fake.set("SELECT COUNT(*)::int FROM fact_commit", [(10,)])
@@ -282,7 +282,7 @@ def test_contributor_detail_plaintext_email_and_contributions(client, app):
     assert contributions["metrics"]["code_deletions"] == 20
     assert contributions["metrics"]["code_total"] == 120
     assert contributions["by_org"][0]["key"] == "huawei"
-    assert contributions["by_org"][0]["name"] == "华为系"
+    assert contributions["by_org"][0]["name"] == "华为"
     assert contributions["by_repo"] == []
 
 

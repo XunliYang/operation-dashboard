@@ -26,7 +26,7 @@ def _row(cid, *, org_key="huawei", metrics=None, **extra):
     login = extra.pop("login", f"user{cid}")
     email = extra.pop("email", f"user{cid}@huawei.com")
     email_masked = extra.pop("email_masked", "u***@huawei.com")
-    org_display = extra.pop("org_display", "华为系" if org_key == "huawei" else None)
+    org_display = extra.pop("org_display", "华为" if org_key == "huawei" else None)
     org_source = extra.pop("org_source", "email_domain")
     org_confidence = extra.pop("org_confidence", 0.6)
     return ContributionRow(
@@ -315,7 +315,7 @@ def test_summary_happy_path(client, app):
         "LEFT JOIN bridge_contributor_org b",
         [
             (10, "zhang", "Zhang Wei", "zhang@huawei.com", "z***@huawei.com",
-             None, None, "huawei", "华为系", "email_domain", 0.6),
+             None, None, "huawei", "华为", "email_domain", 0.6),
         ],
     )
     fake.set("FROM fact_commit WHERE author_id IS NOT NULL", [(10, 165, 5)])

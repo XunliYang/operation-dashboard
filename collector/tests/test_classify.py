@@ -15,7 +15,8 @@ CONFIG_DIR = REPO_ROOT / "config"
 def test_real_mapping_domain_to_org():
     mapping = load_org_mapping(str(CONFIG_DIR))
     assert classify(login="a", email="x@huawei.com", mapping=mapping).org_key == "huawei"
-    # h-partners.com 并入 huawei 成「华为」（需求方 2026-09-22 拍板），不再是独立键
+    # h-partners.com 并入 huawei，不再有 huawei-partner 组织键（需求方 2026-09-22 拍板）；
+    # 展示名由「华为系」改为「华为」（需求方 2026-09-23 拍板），归并关系不变。
     assert classify(login="a", email="x@h-partners.com", mapping=mapping).org_key == "huawei"
     assert classify(login="a", email="x@zte.com.cn", mapping=mapping).org_key == "zte"
     assert classify(login="a", email="x@gdcattsoft.com", mapping=mapping).org_key == "gdcattsoft"
@@ -28,6 +29,15 @@ def test_no_huawei_partner_org_key():
     mapping = load_org_mapping(str(CONFIG_DIR))
     assert "huawei-partner" not in mapping.orgs
     assert mapping.orgs["huawei"].display == "华为"
+
+
+def test_hpartners_maps_to_huawei_key_with_huawei_display():
+    """h-partners.com 归 huawei 键，且该键的展示名是「华为」——两者绑在同一条断言里防回归。"""
+    mapping = load_org_mapping(str(CONFIG_DIR))
+    result = classify(login="a", email="x@h-partners.com", mapping=mapping)
+    assert result.org_key == "huawei"
+    assert mapping.orgs["huawei"].display == "华为"
+    assert "huawei-partner" not in mapping.orgs
 
 
 def test_email_domain_source_is_06():

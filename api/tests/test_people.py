@@ -163,6 +163,30 @@ def test_build_org_board_confirmed_merge_folds_identity():
     assert board["summary"]["alerts"]  # bob 核心层停滞 → 有告警
 
 
+def test_build_org_board_explicit_unclassified_group_not_in_tree():
+    """显式 `_unclassified` 组（source='inferred', confidence=0）计入待归类，不进组织树。"""
+    orgs = [
+        OrgRow(1, "OpenAN", "org", "manual_yaml", None, "openan"),
+        OrgRow(9, "待归类", "org", "inferred", None, "_unclassified"),
+    ]
+    members = [
+        MemberRow(1, "alice", "a***@openan.org", "alice@openan.org", NOW - timedelta(days=2), 1, "maintainer", 1.0, "manual_yaml", 100),
+        # 三个人被分类器归入显式 _unclassified 组（有桥表行指向 org 9）
+        MemberRow(2, "bob", "b***@openan.org", None, None, 9, None, 0.0, "inferred", 0),
+        MemberRow(3, "carol", "c***@x.io", None, None, 9, None, 0.0, "inferred", 0),
+        MemberRow(4, "dave", "d***@y.io", None, None, 9, None, 0.0, "inferred", 0),
+    ]
+    board = build_org_board(orgs, members, [], as_of=NOW)
+
+    assert board["summary"]["unclassified_count"] == 3
+    # _unclassified 伪组织桶不进组织树
+    assert [o["name"] for o in board["orgs"]] == ["OpenAN"]
+    # 三人都进入 unclassified 列表
+    assert {m["login"] for m in board["unclassified"]} == {"bob", "carol", "dave"}
+    # 待归类成员的 org_id 指向 _unclassified 组
+    assert board["unclassified"][0]["org_id"] == "9"
+
+
 # ---------------------------------------------------------------------------
 # 路由（fake conn 冒烟）
 # ---------------------------------------------------------------------------
@@ -213,8 +237,8 @@ def _install(fake: _FakeConn, app):
 
 def _board_responses(fake: _FakeConn) -> None:
     fake.set(
-        "SELECT org_id, name, kind, source, parent_id FROM dim_org",
-        [(1, "OpenAN", "org", "manual_yaml", None)],
+        "SELECT org_id, name, kind, source, parent_id, key FROM dim_org",
+        [(1, "OpenAN", "org", "manual_yaml", None, "openan")],
     )
     fake.set(
         "LEFT JOIN bridge_contributor_org b",

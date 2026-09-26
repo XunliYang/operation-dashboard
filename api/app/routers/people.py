@@ -44,9 +44,9 @@ def _rid(request: Request) -> str:
 
 def _load_board(conn: Connection) -> dict:
     org_rows = [
-        OrgRow(r[0], r[1], r[2], r[3], r[4])
+        OrgRow(r[0], r[1], r[2], r[3], r[4], r[5])
         for r in conn.execute(
-            "SELECT org_id, name, kind, source, parent_id FROM dim_org ORDER BY org_id"
+            "SELECT org_id, name, kind, source, parent_id, key FROM dim_org ORDER BY org_id"
         ).fetchall()
     ]
 

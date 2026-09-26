@@ -93,6 +93,12 @@ def classify_tiers(members: list[MemberActivity], core_fraction: float = CORE_FR
     - 核心：按贡献量降序取前 `core_fraction`（默认 Top 20%）；
     - 其余按最近活跃天数分层：≤30 天 → 活跃，≤90 天 → 偶发，>90 天 → 流失；
     - `days_since_active is None`（无活动数据）按活跃处理，不做流失误判。
+
+    时间基准口径（LEOY-70）：活跃/偶发/流失的 `days_since_active` 以「真实最近
+    活动时间」为准（即 `dim_contributor.last_seen_at`），该值只能由真实事件时间
+    推进，采集侧的展示类 job（如 code_stats）不得写它。窗口常量
+    `ACTIVE_WINDOW_DAYS=30` / `CHURN_DAYS=90` / `CORE_FRACTION=0.2` 为本模块单一
+    来源，勿在别处散落硬编码。
     """
     if not members:
         return {}
